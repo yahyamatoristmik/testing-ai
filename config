@@ -1,0 +1,58 @@
+gunicorn --bind 0.0.0.0:8000 dashboard.wsgi:application
+
+
+[Unit]
+Description=Gunicorn daemon for Django project
+After=network.target
+
+[Service]
+User=dj
+Group=www-data
+WorkingDirectory=/home/dj/ai-evaluator/dashboard
+ExecStart=/home/dj/venv/bin/gunicorn --workers 3 --bind unix:/home/dj/ai-evaluator/dashboard/gunicorn.sock dashboard.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable gunicorn
+sudo systemctl start gunicorn
+sudo systemctl status gunicorn
+
+python manage.py makemigrations message
+python manage.py migrate
+python manage.py dbshell
+SHOW TABLES LIKE 'message_message';
+
+gunicorn systemd
+  GNU nano 6.2                                             /etc/systemd/system/gunicorn.service                                                       
+[Unit]
+Description=Gunicorn daemon for Django project
+After=network.target
+
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=/home/dj/ai-evaluator/dashboard
+Environment="PATH=/home/dj/ai-evaluator/env/bin"
+ExecStart=/usr/local/bin/gunicorn --workers 3 --bind unix:/home/dj/ai-evaluator/dashboard/gunicorn.sock dashboard.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+
+
+
+start gunicorn
+sudo systemctl start gunicorn
+sudo systemctl status gunicorn
+sudo systemctl restart gunicorn
+
+
+whereis gunicorn
+sudo nano /etc/systemd/system/gunicorn.service
+ 2231  sudo systemctl daemon-reexec
+ 2232  sudo systemctl daemon-reload
+ 2233  sudo systemctl enable gunicorn
+ 2234  sudo systemctl start gunicorn
+ 2235  sudo systemctl status gunicorn

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAST Dashboard - SIMPLE</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .card { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .stats { display: flex; gap: 10px; margin: 20px 0; }
+        .stat-card { background: white; padding: 15px; border-radius: 5px; flex: 1; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>🔒 SAST Dashboard - SIMPLE TEST</h1>
+    
+    <div class="stats">
+        <div class="stat-card">
+            <h3>Total Scans</h3>
+            <h2>{{ scan_stats.total|default:"0" }}</h2>
+        </div>
+        <div class="stat-card">
+            <h3>Completed</h3>
+            <h2>{{ scan_stats.completed|default:"0" }}</h2>
+        </div>
+        <div class="stat-card">
+            <h3>High Vulnerabilities</h3>
+            <h2 style="color: red;">{{ vulnerability_stats.high|default:"0" }}</h2>
+        </div>
+        <div class="stat-card">
+            <h3>Medium Vulnerabilities</h3>
+            <h2 style="color: orange;">{{ vulnerability_stats.medium|default:"0" }}</h2>
+        </div>
+    </div>
+    
+    <h2>Recent Scans ({{ recent_scans|length }})</h2>
+    {% for scan in recent_scans %}
+    <div class="card">
+        <strong>Scan #{{ scan.id }}</strong> - {{ scan.repository.name }} - 
+        <span style="color: {% if scan.status == 'completed' %}green{% elif scan.status == 'running' %}orange{% else %}gray{% endif %}">
+            {{ scan.status }}
+        </span>
+        - Findings: {{ scan.findings_count }}
+    </div>
+    {% empty %}
+    <p>No scans yet.</p>
+    {% endfor %}
+    
+    <p><em>This is a simple test template. If you see data here, the problem is in the main template.</em></p>
+</body>
+</html>

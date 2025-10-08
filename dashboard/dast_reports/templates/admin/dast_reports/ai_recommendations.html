@@ -1,0 +1,509 @@
+<!-- dast_reports/templates/admin/dast_reports/ai_recommendations.html -->
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    /* FIX WHITE TEXT ISSUE */
+    .ai-recommendations-container {
+        margin: 20px;
+        padding: 30px;
+        background: #ffffff;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        color: #333333 !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .ai-recommendations-container h1,
+    .ai-recommendations-container h2,
+    .ai-recommendations-container h3,
+    .ai-recommendations-container h4,
+    .ai-recommendations-container p {
+        color: #333333 !important;
+    }
+    
+    .ai-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+        padding: 25px;
+        border-radius: 10px;
+        margin-bottom: 25px;
+        text-align: center;
+    }
+    
+    .ai-header h1 {
+        color: white !important;
+        margin: 0 0 10px 0;
+        font-size: 28px;
+        font-weight: 600;
+    }
+    
+    /* NAVIGATION BUTTONS */
+    .navigation-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+    }
+    
+    .nav-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: #6c757d;
+        color: white !important;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .nav-button:hover {
+        background: #545b62;
+        transform: translateY(-2px);
+        color: white !important;
+        text-decoration: none;
+    }
+    
+    .nav-button.primary {
+        background: #007bff;
+    }
+    
+    .nav-button.primary:hover {
+        background: #0056b3;
+    }
+    
+    .nav-button.success {
+        background: #28a745;
+    }
+    
+    .nav-button.success:hover {
+        background: #1e7e34;
+    }
+    
+    .nav-button.warning {
+        background: #ffc107;
+        color: #212529 !important;
+    }
+    
+    .nav-button.warning:hover {
+        background: #e0a800;
+        color: #212529 !important;
+    }
+    
+    .nav-button.danger {
+        background: #dc3545;
+    }
+    
+    .nav-button.danger:hover {
+        background: #c82333;
+    }
+    
+    .scan-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    
+    .info-card {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+        color: #333 !important;
+    }
+    
+    .info-card h3 {
+        color: #555 !important;
+        font-size: 14px;
+        text-transform: uppercase;
+        margin: 0 0 8px 0;
+    }
+    
+    .info-card p {
+        color: #333 !important;
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    .recommendations-section {
+        background: #ffffff;
+        padding: 25px;
+        border-radius: 10px;
+        border: 1px solid #e9ecef;
+        margin-bottom: 25px;
+    }
+    
+    .recommendation-item {
+        background: #ffffff;
+        padding: 20px;
+        margin: 15px 0;
+        border-radius: 8px;
+        border-left: 5px solid;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        color: #333 !important;
+        transition: transform 0.2s ease;
+    }
+    
+    .recommendation-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .priority-high { border-left-color: #dc3545; background: #fff5f5; }
+    .priority-medium { border-left-color: #fd7e14; background: #fff9f0; }
+    .priority-low { border-left-color: #28a745; background: #f8fff9; }
+    
+    .recommendation-title {
+        color: #333 !important;
+        margin: 0 0 10px 0;
+        font-size: 18px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .priority-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .badge-high { background: #dc3545; color: white; }
+    .badge-medium { background: #fd7e14; color: white; }
+    .badge-low { background: #28a745; color: white; }
+    
+    .loading-spinner {
+        text-align: center;
+        padding: 40px;
+        color: #333 !important;
+    }
+    
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+    }
+    
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 5px;
+        text-decoration: none;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary {
+        background: #007bff;
+        color: white !important;
+    }
+    
+    .btn-primary:hover {
+        background: #0056b3;
+        color: white !important;
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white !important;
+    }
+    
+    .btn-success:hover {
+        background: #1e7e34;
+        color: white !important;
+    }
+    
+    .btn-info {
+        background: #17a2b8;
+        color: white !important;
+    }
+    
+    .btn-info:hover {
+        background: #138496;
+        color: white !important;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* FIX ADMIN OVERRIDES */
+    .ai-recommendations-container * {
+        color: #333333 !important;
+    }
+    
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+        .navigation-buttons {
+            flex-direction: column;
+        }
+        
+        .nav-button {
+            justify-content: center;
+        }
+        
+        .scan-info {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- NAVIGATION BUTTONS -->
+<div class="navigation-buttons">
+    <a href="{% url 'admin:dast_reports_dastscan_changelist' %}" class="nav-button">
+        <i class="fas fa-arrow-left"></i> Kembali ke Tabel Scan
+    </a>
+    
+    <a href="{% url 'admin:dast_reports_dastscan_report' scan.id %}" class="nav-button primary">
+        <i class="fas fa-file-alt"></i> Lihat Report ZAP
+    </a>
+    
+    <a href="{% url 'admin:dast_reports_dastscan_change' scan.id %}" class="nav-button warning">
+        <i class="fas fa-edit"></i> Edit Scan
+    </a>
+    
+    {% if scan.status == 'completed' and scan.ai_analysis_status != 'processing' %}
+    <a href="{% url 'dast_reports:generate_ai_recommendations' scan.id %}" class="nav-button success">
+        <i class="fas fa-bolt"></i> Generate AI Recommendations
+    </a>
+    {% endif %}
+    
+    {% if scan.ai_recommendations %}
+    <button onclick="window.print()" class="nav-button info">
+        <i class="fas fa-print"></i> Print Report
+    </button>
+    {% endif %}
+</div>
+
+<div class="ai-recommendations-container">
+    <!-- Header -->
+    <div class="ai-header">
+        <h1><i class="fas fa-robot"></i> AI Security Recommendations</h1>
+        <p>Powered by DeepSeek AI • Opsitech.id Cybersecurity</p>
+    </div>
+    
+    <!-- Scan Information -->
+    <div class="scan-info">
+        <div class="info-card">
+            <h3><i class="fas fa-globe"></i> Target URL</h3>
+            <p>{{ scan.target_url }}</p>
+        </div>
+        
+        <div class="info-card">
+            <h3><i class="fas fa-calendar"></i> Scan Date</h3>
+            <p>{{ scan.scan_date|date:"M d, Y H:i" }}</p>
+        </div>
+        
+        <div class="info-card">
+            <h3><i class="fas fa-bug"></i> Vulnerabilities Found</h3>
+            <p>{{ scan.vulnerabilities_found }}</p>
+        </div>
+        
+        <div class="info-card">
+            <h3><i class="fas fa-brain"></i> AI Status</h3>
+            <p>{{ scan.get_ai_analysis_status_display }}</p>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="action-buttons">
+        <a href="{% url 'admin:dast_reports_dastscan_report' scan.id %}" class="btn btn-info">
+            <i class="fas fa-search"></i> Detail ZAP Report
+        </a>
+        
+        <a href="{% url 'admin:dast_reports_dastscan_change' scan.id %}" class="btn btn-primary">
+            <i class="fas fa-cog"></i> Scan Settings
+        </a>
+        
+        {% if scan.status == 'completed' and scan.ai_analysis_status != 'processing' %}
+        <a href="{% url 'dast_reports:generate_ai_recommendations' scan.id %}" class="btn btn-success">
+            <i class="fas fa-magic"></i> Generate AI Analysis
+        </a>
+        {% endif %}
+    </div>
+    
+    <!-- AI Recommendations Content -->
+    {% if scan.ai_analysis_status == 'processing' %}
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <h3>AI Analysis in Progress</h3>
+        <p>Please wait while we generate security recommendations...</p>
+        <p><small>This usually takes 15-30 seconds</small></p>
+        
+        <div class="action-buttons" style="justify-content: center; margin-top: 20px;">
+            <a href="{% url 'admin:dast_reports_dastscan_report' scan.id %}" class="btn btn-info">
+                <i class="fas fa-external-link-alt"></i> View ZAP Report While Waiting
+            </a>
+        </div>
+    </div>
+    
+    {% elif scan.ai_analysis_status == 'completed' and scan.ai_recommendations %}
+    <div class="recommendations-section">
+        <h2><i class="fas fa-chart-bar"></i> Security Summary</h2>
+        
+        {% with recommendations=scan.ai_recommendations %}
+        <div class="scan-info">
+            <div class="info-card">
+                <h3>Total Alerts</h3>
+                <p>{{ recommendations.scan_info.total_alerts|default:scan.vulnerabilities_found }}</p>
+            </div>
+            
+            <div class="info-card">
+                <h3>Risk Level</h3>
+                <p style="color: {% if recommendations.risk_summary.level == 'high' %}#dc3545{% elif recommendations.risk_summary.level == 'medium' %}#fd7e14{% else %}#28a745{% endif %} !important;">
+                    {{ recommendations.risk_summary.level|default:"medium"|upper }}
+                </p>
+            </div>
+            
+            <div class="info-card">
+                <h3>Risk Score</h3>
+                <p>{{ recommendations.risk_summary.score|default:50 }}/100</p>
+            </div>
+            
+            <div class="info-card">
+                <h3>Urgent Actions</h3>
+                <p>{{ recommendations.risk_summary.urgent_actions|default:"0" }}</p>
+            </div>
+        </div>
+        
+        <h2><i class="fas fa-lightbulb"></i> Security Recommendations</h2>
+        
+        {% if recommendations.recommendations %}
+            {% for rec in recommendations.recommendations %}
+            <div class="recommendation-item priority-{{ rec.priority|default:'medium' }}">
+                <h3 class="recommendation-title">
+                    <i class="fas fa-{% if rec.priority == 'high' %}exclamation-triangle{% elif rec.priority == 'medium' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                    {{ rec.title|default:"Security Recommendation" }}
+                    <span class="priority-badge badge-{{ rec.priority|default:'medium' }}">
+                        {{ rec.priority|default:"medium"|upper }}
+                    </span>
+                </h3>
+                
+                <p><strong>Action Required:</strong> {{ rec.action|default:"No specific action provided" }}</p>
+                
+                {% if rec.time_estimate %}
+                <p><strong>Time Estimate:</strong> {{ rec.time_estimate }}</p>
+                {% endif %}
+                
+                {% if rec.description %}
+                <p><strong>Description:</strong> {{ rec.description }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="info-card">
+                <p>No specific recommendations available. The security posture appears to be good.</p>
+            </div>
+        {% endif %}
+        {% endwith %}
+        
+        <!-- Additional Action Buttons -->
+        <div class="action-buttons" style="justify-content: center; margin-top: 30px;">
+            <a href="{% url 'admin:dast_reports_dastscan_report' scan.id %}" class="btn btn-primary">
+                <i class="fas fa-file-alt"></i> Compare with ZAP Report
+            </a>
+            
+            <a href="{% url 'admin:dast_reports_dastscan_changelist' %}" class="btn btn-info">
+                <i class="fas fa-list"></i> Back to All Scans
+            </a>
+            
+            <button onclick="window.print()" class="btn btn-success">
+                <i class="fas fa-print"></i> Print This Report
+            </button>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="recommendations-section">
+        <h2><i class="fas fa-info-circle"></i> No AI Recommendations Available</h2>
+        <p>AI analysis has not been performed yet for this scan.</p>
+        
+        <div class="action-buttons" style="justify-content: center;">
+            {% if scan.status == 'completed' %}
+            <a href="{% url 'dast_reports:generate_ai_recommendations' scan.id %}" class="btn btn-success" style="padding: 12px 24px;">
+                <i class="fas fa-bolt"></i> Generate AI Recommendations
+            </a>
+            {% else %}
+            <div class="info-card">
+                <p><i class="fas fa-clock"></i> Please complete the scan first to generate AI recommendations.</p>
+                <a href="{% url 'admin:dast_reports_dastscan_change' scan.id %}" class="btn btn-primary">
+                    <i class="fas fa-cog"></i> Check Scan Status
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Footer -->
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #666 !important;">
+        <p><small>AI Analysis Date: {{ scan.ai_analysis_date|date:"M d, Y H:i"|default:"Not analyzed" }}</small></p>
+        <p><small>Scan ID: {{ scan.id }} • Generated by Opsitech.id Cybersecurity</small></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh jika status processing
+    {% if scan.ai_analysis_status == 'processing' %}
+    setTimeout(function() {
+        console.log('Auto-refreshing AI recommendations page...');
+        window.location.reload();
+    }, 5000);
+    {% endif %}
+    
+    // Smooth scroll untuk anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    });
+    
+    // Print styling
+    const printStyle = `
+        @media print {
+            .navigation-buttons, .action-buttons { display: none !important; }
+            .ai-recommendations-container { margin: 0; padding: 20px; box-shadow: none; }
+            .recommendation-item { break-inside: avoid; }
+        }
+    `;
+    const styleSheet = document.createElement("style");
+    styleSheet.innerText = printStyle;
+    document.head.appendChild(styleSheet);
+});
+</script>
+{% endblock %}

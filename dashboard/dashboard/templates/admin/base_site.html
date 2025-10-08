@@ -1,0 +1,19 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <img src="{% static 'dashboard/opsitech.png' %}" alt="Logo" height="30" style="margin-right: 10px;">
+        Sistem Evaluator & Pentesting Opsitech
+    </a>
+</h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block nav-sidebar %}
+    {% if not is_popup and not is_nav_sidebar_disabled %}
+        {% include "admin/nav_sidebar.html" %}
+    {% endif %}
+{% endblock %}

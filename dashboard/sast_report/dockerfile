@@ -1,0 +1,26 @@
+# Dockerfile.sast
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Install docker-py for Docker SDK
+RUN pip install docker celery
+
+# Copy application code
+COPY . .
+
+# Create user for security
+RUN useradd -m -u 1000 sastuser && chown -R sastuser:sastuser /app
+USER sastuser
+
+CMD ["celery", "-A", "dashboard", "worker", "--loglevel=info"]

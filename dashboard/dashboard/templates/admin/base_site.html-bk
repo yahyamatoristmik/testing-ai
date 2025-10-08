@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+
+{% load i18n %}
+
+{% block html %}<html lang="{{ LANGUAGE_CODE|default:"en-us" }}" {% if LANGUAGE_BIDI %}dir="rtl"{% endif %} {% block html_attrs %}{% endblock html_attrs %}>{% endblock html %}
+
+<head>
+<title>{% block title %}{% if not is_popup %}{% block branding %}{% block site_header %}{{ site_header|default:_('Opsitech Admin') }}{% endblock %}{% endblock %}{% if title %} | {{ title }}{% endif %}{% else %}{% block popup_title %}{% trans 'Popup' %}{% endblock %}{% endif %}{% endblock %}</title>
+{% block stylesheets %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/base.css" %}">
+{% if not is_popup %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/dashboard.css" %}">
+{% endif %}
+{% block extrastyle %}{% endblock %}
+{% endblock stylesheets %}
+{% block extrahead %}{% endblock %}
+{% block bodyclass %}{% if not is_popup %}dashboard {% endif %}{% block extra_bodyclass %}{% endblock %}{% endblock %}
+{% block body %}
+<div id="container">
+{% if not is_popup %}
+{% block header %}
+<div id="header">
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">
+{% load static %}
+<img src="{% static 'dashboard/logo_anda.png' %}" alt="Logo" height="30" style="margin-right: 10px;">
+{% block site_header %}Administrasi Sistem Evaluasi{% endblock %}
+</a></h1>
+{% endblock %}
+{% block nav-global %}{% endblock %}
+</div>
+{% endblock %}
+{% block breadcrumbs %}
+{% endblock %}
+{% endif %}
+<div id="content" {% block content_attrs %}{% endblock %}>
+{% block messages %}
+{% if messages %}
+<ul class="messagelist">{% for message in messages %}
+<li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|capfirst }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock messages %}
+{% block content %}{% block main %}{% endblock %}{% endblock %}
+<div class="clear"></div>
+</div>
+{% block footer %}<div id="footer"></div>{% endblock %}
+</div>
+</body>
+</html>

@@ -1,0 +1,230 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.http import JsonResponse
+from django.utils import timezone
+import threading
+from .models import SCMProfile, Repository, ScanJob, Finding
+from .services.scan_service import SimpleScanService
+from django.db import models  # Tambahkan ini untuk aggregation
+
+@login_required
+def dashboard(request):
+    """Dashboard SAST utama"""
+    scm_profiles = SCMProfile.objects.filter(user=request.user, is_active=True)
+    repositories = Repository.objects.filter(scm_profile__user=request.user, is_active=True)
+    recent_scans = ScanJob.objects.filter(repository__scm_profile__user=request.user).select_related('repository')[:10]
+    
+    # Hitung statistik
+    total_scans = ScanJob.objects.filter(repository__scm_profile__user=request.user).count()
+    completed_scans = ScanJob.objects.filter(
+        repository__scm_profile__user=request.user, 
+        status='completed'
+    ).count()
+    
+    # Hitung findings by severity
+    severity_stats = {}
+    for severity in ['critical', 'high', 'medium', 'low', 'info']:
+        severity_stats[severity] = Finding.objects.filter(
+            scan_job__repository__scm_profile__user=request.user,
+            severity=severity
+        ).count()
+    
+    context = {
+        'scm_profiles': scm_profiles,
+        'repositories': repositories,
+        'recent_scans': recent_scans,
+        'total_scans': total_scans,
+        'completed_scans': completed_scans,
+        'severity_stats': severity_stats,
+    }
+    return render(request, 'sast_report/dashboard.html', context)
+
+@login_required
+def scm_profiles(request):
+    """Kelola SCM Profiles"""
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'add':
+            scm_type = request.POST.get('scm_type')
+            token = request.POST.get('token')
+            username = request.POST.get('username', '')
+            
+            if not scm_type or not token:
+                messages.error(request, "SCM type and token are required")
+                return redirect('sast_report:scm_profiles')
+            
+            # Create new profile
+            profile = SCMProfile.objects.create(
+                user=request.user,
+                scm_type=scm_type,
+                token=token,
+                username=username
+            )
+            messages.success(request, f"✅ {scm_type} profile added successfully!")
+            
+        elif action == 'update':
+            profile_id = request.POST.get('profile_id')
+            token = request.POST.get('token')
+            
+            profile = get_object_or_404(SCMProfile, id=profile_id, user=request.user)
+            profile.token = token
+            profile.save()
+            messages.success(request, f"✅ {profile.scm_type} token updated!")
+            
+        elif action == 'delete':
+            profile_id = request.POST.get('profile_id')
+            profile = get_object_or_404(SCMProfile, id=profile_id, user=request.user)
+            profile.delete()
+            messages.success(request, "✅ SCM profile deleted!")
+        
+        return redirect('sast_report:scm_profiles')
+    
+    profiles = SCMProfile.objects.filter(user=request.user)
+    return render(request, 'sast_report/scm_profiles.html', {'profiles': profiles})
+
+@login_required
+def repositories(request):
+    """Daftar Repositories"""
+    repositories = Repository.objects.filter(
+        scm_profile__user=request.user, 
+        is_active=True
+    ).select_related('scm_profile')
+    
+    # Hitung scan stats untuk setiap repo
+    for repo in repositories:
+        repo.total_scans = ScanJob.objects.filter(repository=repo).count()
+        repo.last_scan = ScanJob.objects.filter(repository=repo).order_by('-created_at').first()
+    
+    context = {
+        'repositories': repositories,
+    }
+    return render(request, 'sast_report/repositories.html', context)
+
+@login_required
+def start_scan(request, repo_id):
+    """Start scan untuk repository"""
+    repository = get_object_or_404(Repository, id=repo_id, scm_profile__user=request.user)
+    
+    # Create scan job
+    scan_job = ScanJob.objects.create(
+        repository=repository,
+        branch=repository.default_branch
+    )
+    
+    # Run scan in background
+    def run_scan():
+        try:
+            scan_service = SimpleScanService(scan_job)
+            scan_service.run_scan()
+        except Exception as e:
+            scan_job.status = 'failed'
+            scan_job.error_message = f"Background error: {str(e)}"
+            scan_job.completed_at = timezone.now()
+            scan_job.save()
+    
+    thread = threading.Thread(target=run_scan)
+    thread.daemon = True
+    thread.start()
+    
+    messages.success(request, f"🚀 Scan started for {repository.name}")
+    return redirect('sast_report:scan_results', scan_id=scan_job.id)
+
+@login_required
+def scan_results(request, scan_id):
+    """Lihat hasil scan"""
+    scan_job = get_object_or_404(
+        ScanJob, 
+        id=scan_id, 
+        repository__scm_profile__user=request.user
+    )
+    findings = Finding.objects.filter(scan_job=scan_job)
+    
+    # Group findings by severity
+    severity_counts = {
+        'critical': findings.filter(severity='critical').count(),
+        'high': findings.filter(severity='high').count(),
+        'medium': findings.filter(severity='medium').count(),
+        'low': findings.filter(severity='low').count(),
+        'info': findings.filter(severity='info').count(),
+    }
+    
+    context = {
+        'scan_job': scan_job,
+        'findings': findings,
+        'severity_counts': severity_counts,
+        'total_findings': sum(severity_counts.values()),
+    }
+    return render(request, 'sast_report/scan_results.html', context)
+
+
+from django.db.models import Count, Q
+
+@login_required
+def scan_history(request):
+    """Riwayat scan dengan statistik menggunakan aggregation"""
+    # Query untuk display (50 scan terbaru)
+    scans = ScanJob.objects.filter(
+        repository__scm_profile__user=request.user
+    ).select_related('repository', 'repository__scm_profile').order_by('-created_at')[:50]
+    
+    # Hitung statistik dengan aggregation (sangat efisien)
+    stats = ScanJob.objects.filter(
+        repository__scm_profile__user=request.user
+    ).aggregate(
+        total=Count('id'),
+        completed=Count('id', filter=Q(status='completed')),
+        running=Count('id', filter=Q(status='running')),
+        failed=Count('id', filter=Q(status='failed')),
+        pending=Count('id', filter=Q(status='pending'))
+    )
+    
+    context = {
+        'scans': scans,
+        'total_scans': stats['total'],
+        'completed_scans': stats['completed'],
+        'running_scans': stats['running'],
+        'failed_scans': stats['failed'],
+        'pending_scans': stats['pending'],
+    }
+    return render(request, 'sast_report/scan_history.html', context)
+
+@login_required
+def scan_status_api(request, scan_id):
+    """API untuk real-time scan status"""
+    scan_job = get_object_or_404(
+        ScanJob, 
+        id=scan_id, 
+        repository__scm_profile__user=request.user
+    )
+    
+    return JsonResponse({
+        'status': scan_job.status,
+        'log': scan_job.scan_log,
+        'error': scan_job.error_message,
+        'findings_count': scan_job.total_findings,
+        'duration': scan_job.get_duration_display() if hasattr(scan_job, 'get_duration_display') else 'N/A',
+    })
+
+@login_required
+def scan_history(request):
+    """Riwayat scan"""
+    scans = ScanJob.objects.filter(
+        repository__scm_profile__user=request.user
+    ).select_related('repository', 'repository__scm_profile').order_by('-created_at')[:50]
+    
+    # Hitung statistik
+    total_scans = scans.count()
+    completed_scans = scans.filter(status='completed').count()
+    running_scans = scans.filter(status='running').count()
+    failed_scans = scans.filter(status='failed').count()
+    
+    context = {
+        'scans': scans,
+        'total_scans': total_scans,
+        'completed_scans': completed_scans,
+        'running_scans': running_scans,
+        'failed_scans': failed_scans,
+    }
+    return render(request, 'sast_report/scan_history.html', context)

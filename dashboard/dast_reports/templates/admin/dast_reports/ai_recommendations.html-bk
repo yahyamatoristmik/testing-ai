@@ -1,0 +1,102 @@
+<!-- dast_reports/templates/admin/dast_reports/ai_recommendations.html -->
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .ai-recommendations-container {
+        margin: 20px;
+        padding: 30px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .scan-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    
+    .info-card {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 4px solid #007bff;
+    }
+    
+    .recommendation-item {
+        background: white;
+        padding: 20px;
+        margin: 15px 0;
+        border-radius: 5px;
+        border-left: 4px solid #28a745;
+    }
+    
+    .loading-spinner {
+        text-align: center;
+        padding: 40px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ai-recommendations-container">
+    <h1>🔍 AI Security Recommendations</h1>
+    <p>Untuk scan: <strong>{{ scan.name }}</strong> - {{ scan.target_url }}</p>
+    
+    <div class="scan-info">
+        <div class="info-card">
+            <h4>Scan Date</h4>
+            <p>{{ scan.scan_date|date:"M d, Y H:i" }}</p>
+        </div>
+        <div class="info-card">
+            <h4>Vulnerabilities</h4>
+            <p>{{ scan.vulnerabilities_found }} found</p>
+        </div>
+        <div class="info-card">
+            <h4>AI Status</h4>
+            <p>{{ scan.get_ai_analysis_status_display }}</p>
+        </div>
+    </div>
+    
+    {% if scan.ai_analysis_status == 'processing' %}
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>AI analysis in progress... Please wait.</p>
+    </div>
+    
+    {% elif scan.ai_analysis_status == 'completed' and scan.ai_recommendations %}
+        {% with recommendations=scan.ai_recommendations %}
+        <div class="recommendations-section">
+            <h3>Security Summary</h3>
+            <div class="info-card">
+                <p><strong>Total Vulnerabilities:</strong> {{ recommendations.summary.total_vulnerabilities }}</p>
+                <p><strong>Risk Level:</strong> {{ recommendations.summary.risk_level }}</p>
+                <p><strong>Recommendation:</strong> {{ recommendations.summary.rekomendasi_umum }}</p>
+            </div>
+            
+            <h3>Detailed Recommendations</h3>
+            {% for rec in recommendations.rekomendasi_detail %}
+            <div class="recommendation-item">
+                <h4>{{ rec.judul }} (Priority: {{ rec.prioritas }})</h4>
+                <p><strong>Description:</strong> {{ rec.deskripsi }}</p>
+                <p><strong>Action:</strong> {{ rec.tindakan }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endwith %}
+    
+    {% else %}
+    <div class="info-card">
+        <p>No AI recommendations available yet.</p>
+        {% if scan.status == 'completed' %}
+        <a href="{% url 'dast_reports:generate_ai_recommendations' scan.id %}" 
+           class="button">Generate AI Recommendations</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+<!-- trigger_scan.html - TAMBAHKAN SCM type filter -->
+
+{% extends 'sast_report/base.html' %}
+
+{% block title %}Trigger Scan{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>🚀 Trigger Security Scan</h1>
+        <p class="text-muted">Start a new security scan for your repository</p>
+    </div>
+</div>
+
+{% if not repositories %}
+<!-- existing warning message -->
+{% else %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Scan Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="scan-form">
+                    {% csrf_token %}
+                    
+                    <!-- ✅ TAMBAH SCM TYPE FILTER -->
+                    <div class="mb-3">
+                        <label for="id_scm_type_filter" class="form-label">Filter by SCM Type</label>
+                        {{ form.scm_type_filter }}
+                        <div class="form-text">Filter repositories by SCM platform</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_repository" class="form-label">Repository *</label>
+                        {{ form.repository }}
+                        {% if form.repository.errors %}
+                            <div class="text-danger">{{ form.repository.errors }}</div>
+                        {% endif %}
+                        <div class="form-text" id="repository-count">
+                            Available repositories: {{ form.repository_count }}
+                        </div>
+                    </div>
+                    
+                    <!-- existing fields tetap sama -->
+                    <div class="mb-3">
+                        <label for="id_branch" class="form-label">Branch *</label>
+                        {{ form.branch }}
+                        <div class="form-text">Specify the branch to scan (default: main)</div>
+                        {% if form.branch.errors %}
+                            <div class="text-danger">{{ form.branch.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_scan_type" class="form-label">Scan Type *</label>
+                        {{ form.scan_type }}
+                        <div class="form-text">
+                            <strong>Full Scan:</strong> Comprehensive security analysis<br>
+                            <strong>Security Audit:</strong> Focus on security vulnerabilities<br>
+                            <strong>Secrets Detection:</strong> Find exposed credentials<br>
+                            <strong>CI Scan:</strong> Fast scan for continuous integration
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="custom-rules-section" style="display: none;">
+                        <label for="id_custom_rules" class="form-label">Custom Rules</label>
+                        {{ form.custom_rules }}
+                        <div class="form-text">Enter custom Semgrep rules in YAML format</div>
+                        {% if form.custom_rules.errors %}
+                            <div class="text-danger">{{ form.custom_rules.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            🚀 Start Security Scan
+                        </button>
+                        <a href="{% url 'sast_report:scan_jobs' %}" class="btn btn-outline-secondary">
+                            📋 View Scan History
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- existing sidebar tetap sama -->
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Show/hide custom rules based on scan type
+document.addEventListener('DOMContentLoaded', function() {
+    const scanTypeSelect = document.getElementById('scan-type-select');
+    const customRulesSection = document.getElementById('custom-rules-section');
+    
+    if (scanTypeSelect && customRulesSection) {
+        function toggleCustomRules() {
+            if (scanTypeSelect.value === 'custom') {
+                customRulesSection.style.display = 'block';
+            } else {
+                customRulesSection.style.display = 'none';
+            }
+        }
+        
+        scanTypeSelect.addEventListener('change', toggleCustomRules);
+        toggleCustomRules(); // Initialize on page load
+    }
+    
+    // ✅ AUTO-RELOAD FORM KETIKA SCM TYPE BERUBAH
+    const scmTypeFilter = document.getElementById('scm-type-filter');
+    if (scmTypeFilter) {
+        scmTypeFilter.addEventListener('change', function() {
+            document.getElementById('scan-form').submit();
+        });
+    }
+});
+</script>
+{% endblock %}

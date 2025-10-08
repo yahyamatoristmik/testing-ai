@@ -1,0 +1,632 @@
+from django.db.models import Sum, F, Value
+from django.db.models.functions import Coalesce
+from django.contrib import admin
+from django.utils.html import format_html
+from django.urls import reverse, path
+from django.http import HttpResponseRedirect, JsonResponse, HttpResponse
+from django.shortcuts import render, get_object_or_404
+from .models import DASTScan
+from .forms import DASTScanForm
+from .jenkins_utils import JenkinsZAPTrigger
+from .utils import generate_scan_pdf, export_multiple_scans_pdf
+from django.contrib import messages
+import logging
+import json
+import os
+from django.db import transaction
+from django.conf import settings
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+
+@admin.register(DASTScan)
+class DASTScanAdmin(admin.ModelAdmin):
+    form = DASTScanForm
+    change_list_template = "admin/dast_reports/dastscan_change_list.html"
+
+    # List display configuration
+    list_display = [
+        'scan_status', 'name', 'target_url', 'scan_type', 'owner',
+        'scan_date', 'vulnerabilities_display', 'risk_score_display',
+        'scan_duration_formatted', 'ai_recommendations_link', 'custom_actions'
+    ]
+
+    list_display_links = ['name', 'target_url']
+
+    # Filter and search options
+    list_filter = [
+        'status', 'scan_type', 'scan_date', 'active', 'scheduled', 'owner'
+    ]
+
+    search_fields = [
+        'name', 'target_url', 'results'
+    ]
+
+    # Pagination
+    list_per_page = 25
+    list_max_show_all = 100
+
+    readonly_fields = [
+        'scan_date', 'status', 'completed_date', 'vulnerabilities_found',
+        'high_vulnerabilities', 'medium_vulnerabilities', 'low_vulnerabilities',
+        'informational_vulnerabilities', 'scan_duration', 'pages_crawled',
+        'requests_made', 'scan_config', 'results', 'jenkins_build_number',
+        'json_report_path', 'created_at', 'updated_at', 'owner',
+        'ai_analysis_status', 'ai_analysis_date', 'report_token'
+    ]
+
+    # Fieldsets for detail view
+    fieldsets = [
+        ('Basic Information', {
+            'fields': [
+                'name', 'target_url', 'scan_type', 'active', 'scheduled'
+            ],
+            'classes': ['wide']
+        }),
+        ('Scan Details', {
+            'fields': [
+                'scan_date', 'completed_date', 'status', 'scan_duration',
+                'pages_crawled', 'requests_made'
+            ],
+            'classes': ['wide']
+        }),
+        ('Vulnerability Results', {
+            'fields': [
+                'high_vulnerabilities', 'medium_vulnerabilities',
+                'low_vulnerabilities', 'informational_vulnerabilities',
+                'vulnerabilities_found'
+            ],
+            'classes': ['wide', 'collapse']
+        }),
+        ('Jenkins Integration', {
+            'fields': [
+                'jenkins_build_number', 'json_report_path'
+            ],
+            'classes': ['wide', 'collapse']
+        }),
+        ('AI Recommendations', {
+            'fields': [
+                'ai_analysis_status', 'ai_analysis_date', 'ai_recommendations', 'report_token'
+            ],
+            'classes': ['wide', 'collapse']
+        }),
+        ('Configuration & Data', {
+            'fields': [
+                'scan_config', 'results'
+            ],
+            'classes': ['wide', 'collapse']
+        }),
+        ('Metadata', {
+            'fields': [
+                'created_at', 'updated_at'
+            ],
+            'classes': ['wide', 'collapse']
+        })
+    ]
+
+    # Custom methods for list display
+    def scan_status(self, obj):
+        status_icons = {
+            'pending': '🟡',
+            'running': '🟠',
+            'completed': '🟢',
+            'failed': '🔴',
+            'canceled': '⚫'
+        }
+        return format_html(
+            '<span style="font-size: 1.2em;">{} {}</span>',
+            status_icons.get(obj.status, '⚪'),
+            obj.get_status_display()
+        )
+    scan_status.short_description = 'Status'
+    scan_status.admin_order_field = 'status'
+
+    def vulnerabilities_display(self, obj):
+        colors = {
+            'high': '#dc3545',
+            'medium': '#fd7e14',
+            'low': '#ffc107',
+            'info': '#17a2b8'
+        }
+
+        return format_html(
+            '<div style="display: flex; gap: 5px; flex-wrap: wrap;">'
+            '<span style="background:{}; color:white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">H: {}</span>'
+            '<span style="background:{}; color:white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">M: {}</span>'
+            '<span style="background:{}; color:white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">L: {}</span>'
+            '<span style="background:{}; color:white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">I: {}</span>'
+            '</div>',
+            colors['high'], obj.high_vulnerabilities,
+            colors['medium'], obj.medium_vulnerabilities,
+            colors['low'], obj.low_vulnerabilities,
+            colors['info'], obj.informational_vulnerabilities
+        )
+    vulnerabilities_display.short_description = 'Vulnerabilities'
+
+    def risk_score_display(self, obj):
+        score = obj.risk_score
+        if score >= 50:
+            color = '#dc3545'
+        elif score >= 20:
+            color = '#fd7e14'
+        elif score >= 10:
+            color = '#ffc107'
+        else:
+            color = '#28a745'
+
+        return format_html(
+            '<span style="background:{}; color:white; padding: 2px 8px; border-radius: 12px; font-weight: bold;">{}</span>',
+            color,
+            score)
+    risk_score_display.short_description = 'Risk Score'
+
+    def scan_duration_formatted(self, obj):
+        return obj.duration_formatted
+    scan_duration_formatted.short_description = 'Duration'
+    scan_duration_formatted.admin_order_field = 'scan_duration'
+
+    def ai_recommendations_link(self, obj):
+        if obj.ai_recommendations:
+            return format_html(
+                '<a href="{}" target="_blank">View AI Report</a> | '
+                '<a href="{}" target="_blank">Public Link</a>',
+                reverse('admin:dastscan_ai_recommendations', args=[obj.id]),
+                request.build_absolute_uri(reverse('dast_reports:public_ai_report', 
+                    kwargs={'scan_id': obj.id, 'token': obj.report_token}))
+            if obj.report_token else '#'
+
+            )
+        elif obj.status == 'completed':
+            # Gunakan button dengan class khusus untuk JavaScript
+            return format_html(
+                '<button class="generate-ai-btn" data-scan-id="{}" style="background: #28a745; color: white; padding: 5px 10px; border: none; border-radius: 3px; cursor: pointer;">Generate AI Report</button>',
+            obj.id
+            )
+        return "Not available"
+    ai_recommendations_link.short_description = 'AI Recommendations'
+
+    def custom_actions(self, obj):
+        return format_html(
+            '<div class="action-buttons">'
+            '<a href="{}" class="button" style="background: #007bff; color: white; padding: 5px 10px; margin: 2px; border-radius: 3px; text-decoration: none;">View</a>'
+            '<a href="{}" class="button" style="background: #28a745; color: white; padding: 5px 10px; margin: 2px; border-radius: 3px; text-decoration: none;">Edit</a>'
+            '</div>',
+            reverse('admin:dast_reports_dastscan_change', args=[obj.id]),
+            reverse('admin:dast_reports_dastscan_change', args=[obj.id]),
+        )
+    custom_actions.short_description = 'Actions'
+
+    # ⭐⭐ PERMISSION METHODS ⭐⭐
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs  # Superuser bisa lihat semua
+        return qs.filter(owner=request.user)  # User biasa hanya lihat miliknya
+
+    def save_model(self, request, obj, form, change):
+        if not obj.owner_id:  # Auto-set owner untuk scan baru
+            obj.owner = request.user
+        super().save_model(request, obj, form, change)
+
+    def has_change_permission(self, request, obj=None):
+        if obj and not request.user.is_superuser:
+            return obj.owner == request.user
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and not request.user.is_superuser:
+            return obj.owner == request.user
+        return super().has_delete_permission(request, obj)
+
+    def has_view_permission(self, request, obj=None):
+        if obj and not request.user.is_superuser:
+            return obj.owner == request.user
+        return super().has_view_permission(request, obj)
+
+    # ⭐⭐ CUSTOM ACTIONS ⭐⭐
+    actions = [
+        'run_scan',
+        'cancel_scan',
+        'export_results',
+        'update_vulnerabilities',
+        'generate_report'
+    ]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:scan_id>/report/',
+                self.admin_site.admin_view(self.scan_report_view),
+                name='dast_reports_dastscan_report',
+            ),
+            path(
+                '<path:object_id>/ai-recommendations/',
+                self.admin_site.admin_view(self.ai_recommendations_view),
+                name='dastscan_ai_recommendations',
+            ),
+            # PERBAIKAN: Tambahkan URL untuk generate_ai_recommendations
+            path(
+                '<int:scan_id>/generate-ai-recommendations/',
+                self.admin_site.admin_view(self.generate_ai_recommendations_view),
+                name='generate_ai_recommendations',
+            ),
+        ]
+        return custom_urls + urls
+
+    def scan_report_view(self, request, scan_id):
+        """
+        View untuk menampilkan report detail dari scan
+        """
+        scan = get_object_or_404(DASTScan, id=scan_id)
+
+        # ⭐⭐ PERIKSA PERMISSION ⭐⭐
+        if not request.user.is_superuser and scan.owner != request.user:
+            return HttpResponseRedirect(reverse('admin:index'))
+
+        # Cari path JSON report
+        json_report_path = None
+
+        if scan.json_report_path and os.path.exists(scan.json_report_path):
+            json_report_path = scan.json_report_path
+        elif scan.jenkins_build_number:
+            json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.jenkins_build_number}.json"
+        else:
+            json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.id}.json"
+
+        # Parse JSON report
+        report_data = None
+        if os.path.exists(json_report_path):
+            try:
+                with open(json_report_path, 'r') as f:
+                    report_data = json.load(f)
+            except Exception as e:
+                report_data = {"error": f"Gagal memparse JSON: {str(e)}"}
+        else:
+            report_data = {"error": f"File report tidak ditemukan: {json_report_path}"}
+
+        context = {
+            'scan': scan,
+            'report_data': report_data,
+            'title': f'Report for {scan.name}',
+        }
+
+        return render(request, 'admin/dast_reports/report.html', context)
+
+    def ai_recommendations_view(self, request, object_id):
+        """
+        View untuk menampilkan rekomendasi AI untuk scan
+        """
+        scan = get_object_or_404(DASTScan, id=object_id)
+        
+        # ⭐⭐ PERIKSA PERMISSION ⭐⭐
+        if not request.user.is_superuser and scan.owner != request.user:
+            return HttpResponseRedirect(reverse('admin:index'))
+
+        context = {
+            'scan': scan,
+            'title': f'AI Recommendations for {scan.name}',
+        }
+
+        return render(request, 'admin/dast_reports/ai_recommendations.html', context)
+
+    def generate_ai_recommendations_view(self, request, scan_id):
+        """
+        View untuk generate AI recommendations - redirect ke fungsi di views.py
+        """
+        from .views import generate_ai_recommendations
+        return generate_ai_recommendations(request, scan_id)
+
+    def run_scan(self, request, queryset):
+        """PERBAIKAN: Filter berdasarkan owner"""
+        # ⭐⭐ FILTER HANYA SCAN MILIK USER ⭐⭐
+        if not request.user.is_superuser:
+            queryset = queryset.filter(owner=request.user)
+
+        jenkins_trigger = JenkinsZAPTrigger()
+        successful_triggers = 0
+        failed_triggers = 0
+
+        with transaction.atomic():
+            target_urls = list(queryset.values_list('target_url', flat=True).distinct())
+
+            scan_ids_to_cancel = DASTScan.objects.filter(
+                target_url__in=target_urls,
+                status='running'
+            ).exclude(id__in=queryset.values_list('id', flat=True)).values_list('id', flat=True)
+
+            if scan_ids_to_cancel:
+                DASTScan.objects.filter(id__in=scan_ids_to_cancel).update(status='canceled')
+
+            for scan in queryset:
+                try:
+                    logger.info(f"Attempting to trigger scan for: {scan.target_url}")
+
+                    existing_completed = DASTScan.objects.filter(
+                        target_url=scan.target_url,
+                        status='completed'
+                    ).exclude(id=scan.id).first()
+
+                    if existing_completed:
+                        scan.high_vulnerabilities = existing_completed.high_vulnerabilities
+                        scan.medium_vulnerabilities = existing_completed.medium_vulnerabilities
+                        scan.low_vulnerabilities = existing_completed.low_vulnerabilities
+                        scan.informational_vulnerabilities = existing_completed.informational_vulnerabilities
+                        scan.vulnerabilities_found = existing_completed.vulnerabilities_found
+                        scan.scan_duration = existing_completed.scan_duration
+                        scan.save()
+
+                    success, message, build_number = jenkins_trigger.trigger_zap_scan(
+                        target_url=scan.target_url,
+                        scan_name=scan.name
+                    )
+
+                    if success:
+                        successful_triggers += 1
+                        scan.jenkins_build_number = build_number
+                        scan.status = 'running'
+                        scan.scan_date = timezone.now()
+                        scan.save()
+                        logger.info(f"Scan triggered successfully for: {scan.target_url}, build: {build_number}")
+                    else:
+                        failed_triggers += 1
+                        logger.error(f"Scan failed for {scan.target_url}: {message}")
+
+                except Exception as e:
+                    failed_triggers += 1
+                    logger.exception(f"Unexpected error triggering scan for {scan.target_url}")
+
+        if successful_triggers > 0:
+            self.message_user(
+                request,
+                f"ZAP scan triggered for {successful_triggers} target(s)",
+                messages.SUCCESS
+            )
+
+        if failed_triggers > 0:
+            self.message_user(
+                request,
+                f"Failed to trigger scan for {failed_triggers} target(s)",
+                messages.ERROR
+            )
+    run_scan.short_description = "🚀 Run Scan on selected target"
+
+    def cancel_scan(self, request, queryset):
+        if not request.user.is_superuser:
+            queryset = queryset.filter(owner=request.user)
+        updated_count = queryset.update(status='canceled')
+        self.message_user(request, f"{updated_count} scans canceled", messages.SUCCESS)
+    cancel_scan.short_description = "❌ Cancel selected scans"
+
+    def export_results(self, request, queryset):
+        """Export scan results to PDF"""
+        # Filter berdasarkan permission
+        if not request.user.is_superuser:
+            queryset = queryset.filter(owner=request.user)
+
+        if not queryset:
+            self.message_user(request, "No scans selected for export", messages.WARNING)
+            return HttpResponseRedirect(request.get_full_path())
+
+        try:
+            if queryset.count() == 1:
+                # Single scan export
+                scan = queryset.first()
+
+                # Cari JSON report path
+                json_report_path = None
+                json_data = None
+
+                if scan.json_report_path and os.path.exists(scan.json_report_path):
+                    json_report_path = scan.json_report_path
+                elif scan.jenkins_build_number:
+                    json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.jenkins_build_number}.json"
+                else:
+                    json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.id}.json"
+
+                # Load JSON data jika ada
+                if os.path.exists(json_report_path):
+                    try:
+                        with open(json_report_path, 'r') as f:
+                            json_data = json.load(f)
+                    except Exception as e:
+                        logger.error(f"Error loading JSON report: {e}")
+                        json_data = None
+
+                # Generate PDF
+                pdf_content = generate_scan_pdf(scan, json_data)
+
+                # Create HTTP response
+                response = HttpResponse(content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="dast_scan_{scan.id}_{scan.name}.pdf"'
+                response.write(pdf_content)
+
+                return response
+
+            else:
+                # Multiple scans export
+                pdf_content = export_multiple_scans_pdf(queryset)
+
+                # Create HTTP response
+                response = HttpResponse(content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="dast_scans_export_{timezone.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
+                response.write(pdf_content)
+
+                return response
+
+        except Exception as e:
+            logger.exception(f"Error exporting scans: {e}")
+            self.message_user(request, f"Error exporting scans: {str(e)}", messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
+    export_results.short_description = "📊 Export results to PDF"
+
+    def update_vulnerabilities(self, request, queryset):
+        if not request.user.is_superuser:
+            queryset = queryset.filter(owner=request.user)
+        updated_count = 0
+        failed_count = 0
+
+        for scan in queryset:
+            try:
+                # METHOD 1: Gunakan json_report_path jika ada
+                if scan.json_report_path and os.path.exists(scan.json_report_path):
+                    json_report_path = scan.json_report_path
+                    logger.info(f"Using stored JSON path: {json_report_path}")
+
+                # METHOD 2: Gunakan build number jika ada
+                elif scan.jenkins_build_number:
+                    json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.jenkins_build_number}.json"
+                    logger.info(f"Using build number path: {json_report_path}")
+
+                # METHOD 3: Fallback ke scan ID (legacy)
+                else:
+                    json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.id}.json"
+                    logger.info(f"Using fallback scan ID path: {json_report_path}")
+
+                if os.path.exists(json_report_path):
+                    success = self._update_from_json(scan, json_report_path)
+                    if success:
+                        updated_count += 1
+                    else:
+                        failed_count += 1
+                else:
+                    logger.warning(f"JSON report not found at: {json_report_path}")
+                    failed_count += 1
+
+            except Exception as e:
+                logger.exception(f"Error updating vulnerabilities for {scan.name}")
+                failed_count += 1
+
+        # Show summary message
+        if updated_count > 0:
+            self.message_user(request, f"Vulnerabilities updated for {updated_count} scan(s)", messages.SUCCESS)
+        if failed_count > 0:
+            self.message_user(request, f"Failed to update {failed_count} scan(s)", messages.WARNING)
+    update_vulnerabilities.short_description = "🔄 Update vulnerabilities from JSON"
+
+    def generate_report(self, request, queryset):
+        if not request.user.is_superuser:
+            queryset = queryset.filter(owner=request.user)
+
+        if queryset.count() != 1:
+            self.message_user(request, "Pilih hanya satu scan untuk menghasilkan report", messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
+
+        scan = queryset.first()
+
+        # Cek apakah JSON report tersedia
+        json_report_path = None
+
+        if scan.json_report_path and os.path.exists(scan.json_report_path):
+            json_report_path = scan.json_report_path
+        elif scan.jenkins_build_number:
+            json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.jenkins_build_number}.json"
+        else:
+            json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.id}.json"
+
+        if not os.path.exists(json_report_path):
+            self.message_user(request, f"JSON report tidak ditemukan di: {json_report_path}", messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
+
+        # Redirect ke halaman report
+        return HttpResponseRedirect(reverse('admin:dast_reports_dastscan_report', args=[scan.id]))
+    generate_report.short_description = "📄 Generate report from selected"
+
+    def _update_from_json(self, scan, json_file_path):
+        """Internal method untuk update vulnerabilities dari JSON file"""
+        try:
+            with open(json_file_path, 'r') as f:
+                data = json.load(f)
+
+            # Reset counters
+            high_count = 0
+            medium_count = 0
+            low_count = 0
+            info_count = 0
+
+            # Parse alerts dari struktur ZAP JSON
+            if 'site' in data and isinstance(data['site'], list):
+                for site in data['site']:
+                    if 'alerts' in site and isinstance(site['alerts'], list):
+                        for alert in site['alerts']:
+                            riskcode = alert.get('riskcode', '0')
+
+                            if riskcode == '3':  # High
+                                high_count += 1
+                            elif riskcode == '2':  # Medium
+                                medium_count += 1
+                            elif riskcode == '1':  # Low
+                                low_count += 1
+                            else:  # Informational (0) atau unknown
+                                info_count += 1
+
+            # Update hanya vulnerability counts saja
+            update_data = {
+                'high_vulnerabilities': high_count,
+                'medium_vulnerabilities': medium_count,
+                'low_vulnerabilities': low_count,
+                'informational_vulnerabilities': info_count,
+                'vulnerabilities_found': high_count + medium_count + low_count + info_count
+            }
+
+            # Update scan object menggunakan bulk update
+            DASTScan.objects.filter(id=scan.id).update(**update_data)
+
+            logger.info(f"Successfully updated vulnerabilities for {scan.name}")
+            return True
+
+        except Exception as e:
+            logger.exception(f"Error updating from JSON for {scan.name}")
+            return False
+
+# dast_reports/admin.py
+# ... kode sebelumnya ...
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+
+        # Dapatkan queryset berdasarkan permission
+        if request.user.is_superuser:
+            # Admin melihat semua data
+            qs = DASTScan.objects.all()
+        else:
+            # User biasa hanya melihat data miliknya
+            qs = DASTScan.objects.filter(owner=request.user)
+
+        # Hitung statistics untuk dashboard berdasarkan queryset yang sesuai
+        extra_context['total_vulnerabilities'] = qs.aggregate(
+            total=Coalesce(Sum('vulnerabilities_found'), Value(0))
+        )['total']
+
+        extra_context['completed_scans'] = qs.filter(status='completed').count()
+        extra_context['running_scans'] = qs.filter(status__in=['running', 'pending']).count()
+        extra_context['high_vulnerabilities'] = qs.aggregate(
+            total=Coalesce(Sum('high_vulnerabilities'), Value(0))
+        )['total']
+
+        # Check jika ada scan running
+        extra_context['has_running_scans'] = qs.filter(status__in=['running', 'pending']).exists()
+
+        # ✅ PERBAIKAN: Handle URL reverse dengan exception handling
+        try:
+            # Coba dengan namespace
+            extra_context['generate_ai_url'] = reverse('dast_reports:generate_ai_recommendations', args=[0])
+        except:
+            try:
+                # Fallback tanpa namespace
+                extra_context['generate_ai_url'] = reverse('generate_ai_recommendations', args=[0])
+            except:
+                # Jika masih gagal, set ke None
+                extra_context['generate_ai_url'] = None
+                extra_context['generate_ai_url_name'] = None
+
+        # Handle AJAX check untuk running scans
+        if request.GET.get('check_running') == '1':
+            has_running = qs.filter(status__in=['running', 'pending']).exists()
+            return JsonResponse({'has_running_scans': has_running})
+
+        # ✅ PERBAIKAN: Pastikan ini adalah return statement terakhir dalam function
+        return super().changelist_view(request, extra_context=extra_context)
+
+# ✅ PASTIKAN TIDAK ADA KODE LAIN SETELAH INI YANG DI LUAR CLASS

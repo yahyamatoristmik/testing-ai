@@ -1,0 +1,6 @@
+{% load admin_urls %}
+
+<!-- Gunakan URL dengan benar -->
+<a href="{% url 'dast_reports:generate_ai_recommendations' object_id %}">
+    Generate AI Recommendations
+</a>

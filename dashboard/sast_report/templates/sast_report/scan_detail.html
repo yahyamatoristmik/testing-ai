@@ -1,0 +1,157 @@
+{% extends 'sast_report/base.html' %}
+
+{% block title %}Scan Details - #{{ scan_job.id }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>🔍 Scan Details #{{ scan_job.id }}</h1>
+        <p class="text-muted">Detailed information about security scan</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Scan Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th>Repository:</th>
+                        <td>{{ scan_job.repository.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Branch:</th>
+                        <td>{{ scan_job.branch }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            <span class="badge 
+                                {% if scan_job.status == 'completed' %}bg-success
+                                {% elif scan_job.status == 'running' %}bg-primary
+                                {% elif scan_job.status == 'pending' %}bg-warning
+                                {% else %}bg-danger{% endif %}">
+                                {{ scan_job.status|title }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Triggered:</th>
+                        <td>{{ scan_job.triggered_at }}</td>
+                    </tr>
+                    <tr>
+                        <th>Started:</th>
+                        <td>{{ scan_job.started_at|default:"Not started" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Finished:</th>
+                        <td>{{ scan_job.finished_at|default:"Not finished" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Duration:</th>
+                        <td>{{ scan_job.get_duration_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>Findings:</th>
+                        <td>
+                            {% if scan_job.findings_count > 0 %}
+                                <span class="text-danger">{{ scan_job.findings_count }} issues found</span>
+                            {% else %}
+                                <span class="text-success">No issues found</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                
+                <div class="mt-3">
+                    <a href="{% url 'sast_report:vulnerability_report' scan_job.id %}" 
+                       class="btn btn-primary {% if scan_job.status != 'completed' %}disabled{% endif %}">
+                        📊 View Vulnerability Report
+                    </a>
+                    <a href="{% url 'sast_report:scan_jobs' %}" class="btn btn-outline-secondary">
+                        ← Back to Scan Jobs
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>Scan Log</h5>
+                <span class="badge bg-secondary">{{ log_lines|length }} lines</span>
+            </div>
+            <div class="card-body">
+                {% if log_lines %}
+                    <div class="log-container" style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                        {% for line in log_lines %}
+                            <div class="log-line {% if 'error' in line.lower or 'failed' in line.lower %}text-danger{% elif 'success' in line.lower or 'completed' in line.lower %}text-success{% elif 'warning' in line.lower %}text-warning{% endif %}">
+                                {{ line }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No log available for this scan.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vulnerability Summary -->
+{% if scan_job.status == 'completed' and scan_job.findings_count > 0 %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Vulnerability Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2 text-center">
+                        <div class="border rounded p-3 {% if scan_job.critical_count > 0 %}bg-danger text-white{% else %}bg-light{% endif %}">
+                            <h4>{{ scan_job.critical_count }}</h4>
+                            <small>Critical</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="border rounded p-3 {% if scan_job.high_count > 0 %}bg-warning{% else %}bg-light{% endif %}">
+                            <h4>{{ scan_job.high_count }}</h4>
+                            <small>High</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="border rounded p-3 {% if scan_job.medium_count > 0 %}bg-info text-white{% else %}bg-light{% endif %}">
+                            <h4>{{ scan_job.medium_count }}</h4>
+                            <small>Medium</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="border rounded p-3 bg-light">
+                            <h4>{{ scan_job.low_count }}</h4>
+                            <small>Low</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="border rounded p-3 bg-light">
+                            <h4>{{ scan_job.info_count }}</h4>
+                            <small>Info</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="border rounded p-3 bg-light">
+                            <h4>{{ scan_job.findings_count }}</h4>
+                            <small>Total</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

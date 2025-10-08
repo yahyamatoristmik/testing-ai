@@ -1,0 +1,88 @@
+{% extends 'sast_report/base.html' %}
+
+{% block title %}Repositories{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-800">Repositories</h1>
+    <p class="text-gray-600">Your connected code repositories</p>
+</div>
+
+<div class="bg-white rounded-lg shadow">
+    <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-semibold">Available Repositories</h2>
+            <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                {{ repositories.count }} repository{{ repositories.count|pluralize }}
+            </span>
+        </div>
+    </div>
+    
+    <div class="p-6">
+        {% if repositories %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for repo in repositories %}
+                <div class="border rounded-lg p-6 hover:shadow-lg transition-shadow">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="font-semibold text-lg text-gray-800">{{ repo.name }}</h3>
+                        <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                            {{ repo.scm_profile.scm_type }}
+                        </span>
+                    </div>
+                    
+                    <p class="text-gray-600 text-sm mb-4 break-words">{{ repo.url }}</p>
+                    
+                    <div class="space-y-2 mb-4">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Branch:</span>
+                            <span class="font-medium">{{ repo.default_branch }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Total Scans:</span>
+                            <span class="font-medium">{{ repo.total_scans }}</span>
+                        </div>
+                        {% if repo.last_scan %}
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Last Scan:</span>
+                            <span class="font-medium {% if repo.last_scan.status == 'completed' %}text-green-600{% elif repo.last_scan.status == 'failed' %}text-red-600{% else %}text-blue-600{% endif %}">
+                                {{ repo.last_scan.status|title }}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex space-x-2">
+                        <a href="{% url 'sast_report:start_scan' repo.id %}" 
+                           class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-center">
+                            <i class="fas fa-play mr-2"></i>Scan Now
+                        </a>
+                        {% if repo.last_scan %}
+                        <a href="{% url 'sast_report:scan_results' repo.last_scan.id %}" 
+                           class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded text-center">
+                            <i class="fas fa-chart-bar mr-2"></i>Results
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center py-12">
+                <i class="fas fa-code-branch text-5xl text-gray-300 mb-4"></i>
+                <h3 class="text-xl font-semibold text-gray-600 mb-2">No Repositories Found</h3>
+                <p class="text-gray-500 mb-6">You need to add SCM profiles first to see your repositories.</p>
+                <a href="{% url 'sast_report:scm_profiles' %}" 
+                   class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg inline-flex items-center">
+                    <i class="fas fa-plus mr-2"></i>Add SCM Profile
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-6">
+    <a href="{% url 'sast_report:dashboard' %}" class="text-blue-500 hover:text-blue-600">
+        <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+    </a>
+</div>
+{% endblock %}

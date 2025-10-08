@@ -1,0 +1,12 @@
+INFO 2025-09-23 04:28:27,000 jenkins_utils Jenkins connected successfully
+INFO 2025-09-23 04:28:27,003 admin Attempting to trigger scan for: https://finmdn.blueray-cargo.com:8443/blueray-finance
+INFO 2025-09-23 04:28:27,101 admin Scan triggered successfully for: https://finmdn.blueray-cargo.com:8443/blueray-finance, build: 230
+INFO 2025-09-23 04:29:52,086 jenkins_utils Jenkins connected successfully
+INFO 2025-09-23 04:29:52,089 admin Attempting to trigger scan for: http://investpro.id
+INFO 2025-09-23 04:29:52,102 admin Scan triggered successfully for: http://investpro.id, build: 231
+INFO 2025-09-23 04:32:19,615 jenkins_utils Jenkins connected successfully
+INFO 2025-09-23 04:32:19,618 admin Attempting to trigger scan for: https://investpro.id
+INFO 2025-09-23 04:32:19,630 admin Scan triggered successfully for: https://investpro.id, build: 232
+INFO 2025-09-23 04:34:13,391 jenkins_utils Jenkins connected successfully
+INFO 2025-09-23 04:34:13,394 admin Attempting to trigger scan for: https://investpro.id
+INFO 2025-09-23 04:34:13,406 admin Scan triggered successfully for: https://investpro.id, build: 233

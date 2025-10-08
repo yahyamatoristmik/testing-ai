@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="module">
+    <h1>🔐 User Login Logs (7 Hari Terakhir)</h1>
+    
+    <div class="ip-info" style="background: #f8f9fa; padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+        <strong>IP Address Anda:</strong> <code>{{ current_ip }}</code>
+    </div>
+    
+    <div class="logs-container">
+        {% if recent_logs %}
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f1f1f1;">
+                        <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Timestamp</th>
+                        <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Event</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs reversed %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px 10px; font-family: monospace; font-size: 12px;">
+                            {{ log|slice:":19" }}
+                        </td>
+                        <td style="padding: 8px 10px; font-family: monospace; font-size: 12px;">
+                            {{ log|slice:"20:" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No login logs found.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

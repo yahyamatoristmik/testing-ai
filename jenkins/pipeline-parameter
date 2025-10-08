@@ -1,0 +1,114 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'CHOICE_SITE',
+            choices: [
+                'http://danamon.oforu.id',
+                'https://inpension.opsitech.id',
+                'https://apps5.investpro.id',
+                'https://investpro.id'
+            ],
+            description: 'Pilih target site untuk di-scan'
+        )
+    }
+
+    environment {
+        ZAP_REPORT_DIR = "/var/lib/jenkins/workspace/DAST-Automatis/zap-reports/html"
+        ZAP_FUZZY_DIR = "/var/lib/jenkins/workspace/DAST-Automatis/script"
+    }
+
+stages {
+        stage('Prepare') {
+            steps {
+                echo "Membersihkan folder report lama..."
+                sh """
+                    mkdir -p ${ZAP_REPORT_DIR}
+                    
+                """
+            }
+        }
+    
+        stage('Run ZAP Scan') {
+            steps {
+                echo "Menjalankan ZAP Full Scan dan menghasilkan JSON..."
+                sh """
+                    sudo docker run --rm \
+                        -u root \
+                        -v ${ZAP_REPORT_DIR}:/zap/wrk \
+                        -p 8090:8080 \
+                        zaproxy/zap-stable \
+                        zap-full-scan.py \
+                        -t ${params.CHOICE_SITE} \
+                        -J /zap/wrk/zap-report.json \
+                        -z "-config exitOnWarn=false" || true
+                """
+            }
+        }
+    
+    stage('Archive Report') {
+        steps {
+            echo "Menyimpan report JSON di Jenkins workspace..."
+            sh "ls -l ${ZAP_REPORT_DIR}"
+            archiveArtifacts artifacts: 'zap-reports/html/zap-report.json', allowEmptyArchive: true
+        }
+    }
+    stage('Run Fuzzy Risk Calculating') {
+        steps {
+            echo "Menjalankan script fuzzy risk scoring..."
+            sh """
+                ls
+                cd ${ZAP_FUZZY_DIR}
+                python3 1-fuzzy-zap-calculating.py
+                ls
+            """
+        }
+    }
+    
+    stage('Run Fuzzy Risk Detail Score') {
+        steps {
+            echo "Menjalankan script fuzzy Risk Detail..."
+            sh """
+                ls
+                cd ${ZAP_FUZZY_DIR}
+                python3 2.2-fuzzy-detail-score.py
+                ls
+            """
+        }
+    }
+   stage('Run Generate Fuzzy Score to HTML') {
+        steps {
+            echo "Menjalankan script fuzzy generate HTML..."
+            sh """
+                ls
+                cd ${ZAP_FUZZY_DIR}
+                python3 3.fuzzy_generate_html.py
+                ls
+            """
+        }
+    }
+   stage('Copy HTML ke webserver ') {
+        steps {
+            echo "Menyalin html script fuzzy-HTML ke webserver"
+            sh """
+                ls
+                cd ${ZAP_FUZZY_DIR}
+                cp -rv 3.fuzzy_risk_report.html /var/www/html/dast/zap/
+                cp -rv 2.2-fuzzy_risk_report.json /var/www/html/dast/zap/
+                ls
+            """
+        }
+    }
+   
+}
+
+    post {
+        always {
+            echo "Pipeline selesai."
+            sh "sudo sh -c 'echo 1 > /proc/sys/vm/drop_caches'"
+            sh "sudo sh -c 'echo 2 > /proc/sys/vm/drop_caches'"
+            sh "sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'"
+        }
+    }
+  }

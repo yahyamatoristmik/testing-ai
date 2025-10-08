@@ -1,0 +1,10 @@
+{% load static %}
+<div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 10px 15px; margin: 10px 0;">
+    <strong>🔒 Informasi Keamanan Login</strong>
+    <div style="margin-top: 5px;">
+        <span>IP Address Anda: <strong>{{ current_user_ip }}</strong></span>
+        {% if last_login_ip %}
+        <span style="margin-left: 15px;">IP Login Terakhir: <strong>{{ last_login_ip }}</strong></span>
+        {% endif %}
+    </div>
+</div>

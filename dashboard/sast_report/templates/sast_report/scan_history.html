@@ -1,0 +1,245 @@
+{% extends 'sast_report/base.html' %}
+
+{% block title %}Scan History{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-800">Scan History</h1>
+    <p class="text-gray-600">History of all security scans</p>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+        <div class="flex items-center">
+            <i class="fas fa-chart-bar text-blue-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Total Scans</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ total_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+        <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Completed</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ completed_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
+        <div class="flex items-center">
+            <i class="fas fa-running text-yellow-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Running</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ running_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-red-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Failed</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ failed_scans }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Bars -->
+{% if total_scans > 0 %}
+<div class="bg-white rounded-lg shadow p-6 mt-6">
+    <h3 class="text-lg font-semibold text-gray-800 mb-4">Scan Distribution</h3>
+    <div class="space-y-3">
+        <!-- Completed Progress -->
+        <div>
+            <div class="flex justify-between text-sm mb-1">
+                <span class="text-green-600 font-medium">Completed</span>
+                <span class="text-gray-600">
+                    {{ completed_scans }} ({% widthratio completed_scans total_scans 100 %}%)
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-green-500 h-2 rounded-full" 
+                     style="width: {% widthratio completed_scans total_scans 100 %}%"></div>
+            </div>
+        </div>
+        
+        <!-- Running Progress -->
+        <div>
+            <div class="flex justify-between text-sm mb-1">
+                <span class="text-yellow-600 font-medium">Running</span>
+                <span class="text-gray-600">
+                    {{ running_scans }} ({% widthratio running_scans total_scans 100 %}%)
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-yellow-500 h-2 rounded-full" 
+                     style="width: {% widthratio running_scans total_scans 100 %}%"></div>
+            </div>
+        </div>
+        
+        <!-- Failed Progress -->
+        <div>
+            <div class="flex justify-between text-sm mb-1">
+                <span class="text-red-600 font-medium">Failed</span>
+                <span class="text-gray-600">
+                    {{ failed_scans }} ({% widthratio failed_scans total_scans 100 %}%)
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-red-500 h-2 rounded-full" 
+                     style="width: {% widthratio failed_scans total_scans 100 %}%"></div>
+            </div>
+        </div>
+        
+        <!-- Pending Progress -->
+        <div>
+            <div class="flex justify-between text-sm mb-1">
+                <span class="text-blue-600 font-medium">Pending</span>
+                <span class="text-gray-600">
+                    {{ pending_scans }} ({% widthratio pending_scans total_scans 100 %}%)
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-500 h-2 rounded-full" 
+                     style="width: {% widthratio pending_scans total_scans 100 %}%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Scan History Table -->
+<div class="bg-white rounded-lg shadow mt-8">
+    <div class="p-6 border-b">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xl font-semibold">Scan History</h2>
+            <div class="flex items-center space-x-4">
+                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                    Showing {{ scans.count }} of {{ total_scans }} scans
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-6">
+        {% if scans %}
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Repository</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Findings</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for scan in scans %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <i class="fab fa-{{ scan.repository.scm_profile.scm_type }} text-gray-400 mr-3 text-lg"></i>
+                                    <div>
+                                        <div class="font-medium text-gray-900">{{ scan.repository.name }}</div>
+                                        <div class="text-sm text-gray-500">{{ scan.repository.scm_profile.scm_type|title }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {{ scan.branch }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if scan.status == 'completed' %}bg-green-100 text-green-800
+                                    {% elif scan.status == 'running' %}bg-yellow-100 text-yellow-800
+                                    {% elif scan.status == 'failed' %}bg-red-100 text-red-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {% if scan.status == 'running' %}
+                                        <i class="fas fa-spinner fa-spin mr-1"></i>
+                                    {% elif scan.status == 'completed' %}
+                                        <i class="fas fa-check mr-1"></i>
+                                    {% elif scan.status == 'failed' %}
+                                        <i class="fas fa-times mr-1"></i>
+                                    {% endif %}
+                                    {{ scan.status|title }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                {% if scan.status == 'completed' %}
+                                    {% if scan.total_findings > 0 %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                                            {{ scan.total_findings }} issue{{ scan.total_findings|pluralize }}
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <i class="fas fa-check mr-1"></i>
+                                            Clean
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-sm text-gray-500">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">{{ scan.created_at|date:"M d, Y" }}</div>
+                                <div class="text-sm text-gray-500">{{ scan.created_at|time:"H:i" }}</div>
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                {% if scan.duration %}
+                                    <span class="text-sm font-medium text-gray-900">{{ scan.duration|floatformat:1 }}s</span>
+                                {% else %}
+                                    <span class="text-sm text-gray-500">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                                <div class="flex space-x-2">
+                                    {% if scan.status == 'completed' %}
+                                    <a href="{% url 'sast_report:scan_results' scan.id %}" 
+                                       class="text-blue-600 hover:text-blue-900 inline-flex items-center">
+                                        <i class="fas fa-eye mr-1"></i> View
+                                    </a>
+                                    {% endif %}
+                                    <a href="{% url 'sast_report:start_scan' scan.repository.id %}" 
+                                       class="text-green-600 hover:text-green-900 inline-flex items-center">
+                                        <i class="fas fa-redo mr-1"></i> Rescan
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-12">
+                <i class="fas fa-history text-5xl text-gray-300 mb-4"></i>
+                <h3 class="text-xl font-semibold text-gray-600 mb-2">No Scan History</h3>
+                <p class="text-gray-500 mb-6">You haven't run any security scans yet.</p>
+                <a href="{% url 'sast_report:repositories' %}" 
+                   class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg inline-flex items-center">
+                    <i class="fas fa-play mr-2"></i>Start Your First Scan
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-6">
+    <a href="{% url 'sast_report:dashboard' %}" class="text-blue-500 hover:text-blue-600">
+        <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+    </a>
+</div>
+{% endblock %}

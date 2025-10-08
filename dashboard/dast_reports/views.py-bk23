@@ -1,0 +1,367 @@
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
+from django.urls import reverse
+from django.contrib import messages
+from .models import DASTScan
+import json
+import os
+import requests
+from django.conf import settings
+from django.utils import timezone
+import secrets
+import logging
+import re
+
+# ✅ DEFINISIKAN LOGGER
+logger = logging.getLogger(__name__)
+
+# ==================== FUNGSI EXISTING ====================
+
+@staff_member_required
+def scan_report_view(request, scan_id):
+    """
+    View untuk menampilkan report detail dari scan
+    """
+    scan = get_object_or_404(DASTScan, id=scan_id)
+    
+    # PERIKSA PERMISSION
+    if not request.user.is_superuser and scan.owner != request.user:
+        return HttpResponseRedirect(reverse('admin:index'))
+
+    # Cari path JSON report
+    json_report_path = None
+    if scan.json_report_path and os.path.exists(scan.json_report_path):
+        json_report_path = scan.json_report_path
+    elif scan.jenkins_build_number:
+        json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.jenkins_build_number}.json"
+    else:
+        json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.id}.json"
+
+    # Parse JSON report
+    report_data = None
+    if os.path.exists(json_report_path):
+        try:
+            with open(json_report_path, 'r') as f:
+                report_data = json.load(f)
+        except Exception as e:
+            report_data = {"error": f"Gagal memparse JSON: {str(e)}"}
+    else:
+        report_data = {"error": f"File report tidak ditemukan: {json_report_path}"}
+
+    context = {
+        'scan': scan,
+        'report_data': report_data,
+        'title': f'Report for {scan.name}',
+    }
+
+    return render(request, 'admin/dast_reports/report.html', context)
+
+@csrf_exempt
+@staff_member_required
+def trigger_zap_scan_view(request, scan_id):
+    """View untuk trigger single scan dari button"""
+    try:
+        scan = DASTScan.objects.get(id=scan_id)
+        # Di sini nanti akan panggil Jenkins trigger
+        return JsonResponse({
+            'status': 'success', 
+            'message': f'Scan triggered for {scan.target_url}'
+        })
+    except DASTScan.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Scan not found'})
+
+# ==================== FUNGSI BARU AI RECOMMENDATIONS ====================
+@staff_member_required
+def ai_recommendations_view(request, object_id):
+    """View untuk menampilkan AI recommendations"""
+    scan = get_object_or_404(DASTScan, id=object_id)
+    
+    # Permission check
+    if not request.user.is_superuser and scan.owner != request.user:
+        return HttpResponseRedirect(reverse('admin:index'))
+    
+    context = {
+        'scan': scan,
+        'title': f'AI Recommendations for {scan.name}',
+    }
+    
+    return render(request, 'admin/dast_reports/ai_recommendations.html', context)
+
+@staff_member_required
+@csrf_exempt
+def generate_ai_recommendations(request, scan_id):
+    """
+    Generate AI recommendations - SIMPLE VERSION
+    """
+    print(f"🚀 Starting AI generation for scan {scan_id}")
+    
+    try:
+        scan = get_object_or_404(DASTScan, id=scan_id)
+        
+        # Permission check
+        if not request.user.is_superuser and scan.owner != request.user:
+            return JsonResponse({'status': 'error', 'message': 'Permission denied'})
+        
+        if scan.status != 'completed':
+            return JsonResponse({'status': 'error', 'message': 'Scan must be completed'})
+        
+        # Update status to processing
+        scan.ai_analysis_status = 'processing'
+        scan.save(update_fields=['ai_analysis_status'])
+        
+        print(f"📁 Processing scan: {scan.name}")
+        
+        # 1. Cari JSON report file
+        json_report_path = None
+        if scan.json_report_path and os.path.exists(scan.json_report_path):
+            json_report_path = scan.json_report_path
+        elif scan.jenkins_build_number:
+            json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.jenkins_build_number}.json"
+        else:
+            json_report_path = f"/var/lib/jenkins/workspace/DAST-Automasi/zap-reports/zap-report-{scan.id}.json"
+        
+        print(f"📄 Looking for report: {json_report_path}")
+        
+        # 2. Baca JSON report
+        if not os.path.exists(json_report_path):
+            error_msg = f"Report file not found: {json_report_path}"
+            print(f"❌ {error_msg}")
+            return JsonResponse({'status': 'error', 'message': error_msg})
+        
+        with open(json_report_path, 'r') as f:
+            report_data = json.load(f)
+        
+        alerts = report_data.get('site', [{}])[0].get('alerts', [])
+        print(f"🔍 Found {len(alerts)} alerts")
+        
+        # 3. Siapkan prompt untuk AI
+        prompt = f"""
+Berdasarkan laporan keamanan OWASP ZAP untuk website {scan.target_url}, 
+yang menemukan {len(alerts)} vulnerability.
+
+Berikan rekomendasi perbaikan keamanan dalam bahasa Indonesia dengan format JSON:
+
+{{
+  "summary": {{
+    "total_vulnerabilities": {len(alerts)},
+    "risk_level": "tinggi/sedang/rendah",
+    "rekomendasi_umum": "string"
+  }},
+  "rekomendasi_detail": [
+    {{
+      "judul": "string",
+      "deskripsi": "string", 
+      "tindakan": "string",
+      "prioritas": "tinggi/sedang/rendah"
+    }}
+  ]
+}}
+"""
+        
+        # 4. Call OpenRouter API dengan retry sederhana
+        api_key = getattr(settings, 'OPENROUTER_API_KEY', '')
+        if not api_key:
+            print("❌ OpenRouter API key not found")
+            return create_fallback_response(request, scan, alerts, "API key not configured")
+        
+        print("🌐 Calling OpenRouter API...")
+        
+        for attempt in range(3):  # 3 attempts
+            try:
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                data = {
+                    "model": "deepseek/deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 2000,
+                    "temperature": 0.7
+                }
+                
+                response = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=45
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    ai_content = result['choices'][0]['message']['content']
+                    print("✅ API call successful")
+                    
+                    # Parse AI response
+                    if '```json' in ai_content:
+                        ai_content = ai_content.split('```json')[1].split('```')[0].strip()
+                    elif '```' in ai_content:
+                        ai_content = ai_content.split('```')[1].split('```')[0].strip()
+                    
+                    recommendations = json.loads(ai_content)
+                    break
+                    
+                elif response.status_code == 429:
+                    wait_time = (attempt + 1) * 5  # 5, 10, 15 seconds
+                    print(f"⏰ Rate limited. Waiting {wait_time} seconds...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"❌ API error {response.status_code}")
+                    recommendations = None
+                    break
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"❌ Request error: {e}")
+                if attempt < 2:
+                    time.sleep(5)
+                    continue
+                recommendations = None
+                break
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON parse error: {e}")
+                recommendations = None
+                break
+        
+        # 5. Jika API gagal, gunakan fallback
+        if not recommendations:
+            print("🔄 Using fallback recommendations")
+            recommendations = {
+                "summary": {
+                    "total_vulnerabilities": len(alerts),
+                    "risk_level": "tinggi" if len(alerts) > 0 else "rendah",
+                    "rekomendasi_umum": "Lakukan review keamanan menyeluruh"
+                },
+                "rekomendasi_detail": [
+                    {
+                        "judul": "Security Hardening",
+                        "deskripsi": "Tingkatkan pengaturan keamanan server dan aplikasi",
+                        "tindakan": "Update dependencies, implementasikan WAF, configure CSP headers",
+                        "prioritas": "tinggi"
+                    }
+                ]
+            }
+        
+        # 6. Save ke database
+        scan.ai_recommendations = recommendations
+        scan.ai_analysis_status = 'completed'
+        scan.ai_analysis_date = timezone.now()
+        
+        if not scan.report_token:
+            scan.report_token = secrets.token_urlsafe(32)
+            
+        scan.save()
+        
+        print("✅ AI recommendations saved successfully")
+        
+        # 7. Return response
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'status': 'success', 
+                'message': 'AI recommendations generated',
+                'redirect_url': reverse('admin:dastscan_ai_recommendations', args=[scan.id])
+            })
+        else:
+            messages.success(request, 'AI recommendations generated successfully')
+            return HttpResponseRedirect(reverse('admin:dastscan_ai_recommendations', args=[scan.id]))
+            
+    except Exception as e:
+        print(f"💥 ERROR in generate_ai_recommendations: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return JsonResponse({
+            'status': 'error', 
+            'message': f'Error: {str(e)}'
+        }, status=500)
+
+
+
+def create_fallback_response(request, scan, alerts, reason):
+    """Buat fallback recommendations"""
+    fallback = {
+        "summary": {
+            "total_vulnerabilities": len(alerts),
+            "risk_level": "tinggi" if len(alerts) > 5 else "sedang",
+            "rekomendasi_umum": f"Rekomendasi fallback ({reason})"
+        },
+        "rekomendasi_detail": [
+            {
+                "judul": "Security Review",
+                "deskripsi": "Lakukan pengecekan keamanan berkala",
+                "tindakan": "Update sistem dan monitor vulnerability",
+                "prioritas": "tinggi"
+            }
+        ]
+    }
+    
+    scan.ai_recommendations = fallback
+    scan.ai_analysis_status = 'completed'
+    scan.ai_analysis_date = timezone.now()
+    
+    if not scan.report_token:
+        scan.report_token = secrets.token_urlsafe(32)
+        
+    scan.save()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'status': 'success', 
+            'message': 'Fallback recommendations generated',
+            'redirect_url': reverse('admin:dastscan_ai_recommendations', args=[scan.id])
+        })
+    else:
+        messages.success(request, 'Fallback recommendations generated')
+        return HttpResponseRedirect(reverse('admin:dastscan_ai_recommendations', args=[scan.id]))
+
+@login_required
+def public_ai_report_view(request, scan_id, token):
+    """
+    View publik untuk melihat laporan AI dengan token
+    """
+    scan = get_object_or_404(DASTScan, id=scan_id)
+    
+    # Check token
+    if scan.report_token != token:
+        return HttpResponseForbidden("Token tidak valid")
+    
+    context = {
+        'scan': scan,
+        'title': f'Laporan Keamanan - {scan.name}',
+        'is_public': True,
+    }
+    
+    return render(request, 'admin/dast_reports/public_ai_report.html', context)
+
+@login_required
+def check_running_scans(request):
+    """API untuk check jika ada scan yang masih running"""
+    from .models import DASTScan
+    
+    if request.user.is_superuser:
+        running_scans = DASTScan.objects.filter(status__in=['running', 'pending']).exists()
+    else:
+        running_scans = DASTScan.objects.filter(
+            owner=request.user, 
+            status__in=['running', 'pending']
+        ).exists()
+    
+    return JsonResponse({
+        'has_running_scans': running_scans,
+        'timestamp': timezone.now().isoformat()
+    })
+
+@staff_member_required
+def test_view(request):
+    """Test view untuk debug"""
+    return JsonResponse({
+        'status': 'success',
+        'message': 'Test view works!',
+        'user': request.user.username,
+        'is_authenticated': request.user.is_authenticated,
+        'is_staff': request.user.is_staff,
+        'is_superuser': request.user.is_superuser
+    })

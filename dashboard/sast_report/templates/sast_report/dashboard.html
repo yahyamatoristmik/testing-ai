@@ -1,0 +1,174 @@
+{% extends 'sast_report/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-800">Security Dashboard</h1>
+    <p class="text-gray-600">Monitor your code security scans and findings</p>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+        <div class="flex items-center">
+            <i class="fas fa-shield-alt text-blue-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Total Scans</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ total_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+        <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Completed</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ completed_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+        <div class="flex items-center">
+            <i class="fas fa-bug text-red-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Critical</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ severity_stats.critical }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-orange-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">High</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ severity_stats.high }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- SCM Profiles -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+            <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                <i class="fab fa-github mr-3 text-gray-600"></i>
+                SCM Profiles
+            </h2>
+        </div>
+        <div class="p-6">
+            {% if scm_profiles %}
+                <div class="space-y-3">
+                    {% for profile in scm_profiles %}
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <div>
+                            <span class="font-medium">{{ profile.scm_type|title }}</span>
+                            <span class="text-gray-600 text-sm ml-2">@{{ profile.username }}</span>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full 
+                            {% if profile.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ profile.is_active|yesno:"Active,Inactive" }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 text-center py-4">No SCM profiles configured</p>
+            {% endif %}
+            <div class="mt-4">
+                <a href="{% url 'sast_report:scm_profiles' %}" 
+                   class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i>Manage SCM Profiles
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+            <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                <i class="fas fa-history mr-3 text-gray-600"></i>
+                Recent Scans
+            </h2>
+        </div>
+        <div class="p-6">
+            {% if recent_scans %}
+                <div class="space-y-3">
+                    {% for scan in recent_scans %}
+                    <div class="flex justify-between items-center p-3 border rounded">
+                        <div>
+                            <div class="font-medium">{{ scan.repository.name }}</div>
+                            <div class="text-sm text-gray-600">{{ scan.created_at|date:"M d, Y H:i" }}</div>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full 
+                            {% if scan.status == 'completed' %}bg-green-100 text-green-800
+                            {% elif scan.status == 'running' %}bg-blue-100 text-blue-800
+                            {% elif scan.status == 'failed' %}bg-red-100 text-red-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ scan.status|title }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 text-center py-4">No scans yet</p>
+            {% endif %}
+            <div class="mt-4">
+                <a href="{% url 'sast_report:scan_history' %}" 
+                   class="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-list mr-2"></i>View All Scans
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Repositories -->
+<div class="bg-white rounded-lg shadow">
+    <div class="p-6 border-b">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+            <i class="fas fa-code-branch mr-3 text-gray-600"></i>
+            Your Repositories
+        </h2>
+    </div>
+    <div class="p-6">
+        {% if repositories %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for repo in repositories %}
+                <div class="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-semibold text-lg">{{ repo.name }}</h3>
+                        <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                            {{ repo.scm_profile.scm_type }}
+                        </span>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">{{ repo.url }}</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500">Branch: {{ repo.default_branch }}</span>
+                        <a href="{% url 'sast_report:start_scan' repo.id %}" 
+                           class="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded text-sm">
+                            <i class="fas fa-play mr-1"></i>Scan
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 text-center py-4">No repositories found</p>
+        {% endif %}
+        <div class="mt-6">
+            <a href="{% url 'sast_report:repositories' %}" 
+               class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg inline-flex items-center">
+                <i class="fas fa-eye mr-2"></i>View All Repositories
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAST Dashboard - MINIMAL</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+        .stat { background: #fff; padding: 20px; border-radius: 5px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat.high { border-left: 4px solid #e74c3c; }
+        .stat.medium { border-left: 4px solid #f39c12; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #2c3e50; color: white; }
+        .success { color: #27ae60; }
+        .warning { color: #f39c12; }
+        .danger { color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 SAST Security Dashboard</h1>
+        <p><strong>Status:</strong> Data loaded successfully at {% now "H:i:s" %}</p>
+        
+        <div class="stats">
+            <div class="stat">
+                <h3>{{ scan_stats.total|default:"0" }}</h3>
+                <p>Total Scans</p>
+            </div>
+            <div class="stat">
+                <h3 class="success">{{ scan_stats.completed|default:"0" }}</h3>
+                <p>Completed</p>
+            </div>
+            <div class="stat high">
+                <h3 class="danger">{{ vulnerability_stats.high|default:"0" }}</h3>
+                <p>High Risk</p>
+            </div>
+            <div class="stat medium">
+                <h3 class="warning">{{ vulnerability_stats.medium|default:"0" }}</h3>
+                <p>Medium Risk</p>
+            </div>
+        </div>
+
+        <h2>Recent Security Scans</h2>
+        {% if recent_scans %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Repository</th>
+                    <th>Status</th>
+                    <th>Findings</th>
+                    <th>Started</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in recent_scans %}
+                <tr>
+                    <td><strong>#{{ scan.id }}</strong></td>
+                    <td>{{ scan.repository.name }}</td>
+                    <td>
+                        <span class="{% if scan.status == 'completed' %}success{% elif scan.status == 'running' %}warning{% else %}danger{% endif %}">
+                            {{ scan.status|upper }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="{% if scan.findings_count > 0 %}danger{% else %}success{% endif %}">
+                            {{ scan.findings_count }} findings
+                        </span>
+                    </td>
+                    <td>{{ scan.triggered_at|date:"M d, H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No scans available.</p>
+        {% endif %}
+        
+        <div style="margin-top: 30px; padding: 15px; background: #ecf0f1; border-radius: 5px;">
+            <p><strong>Debug Info:</strong></p>
+            <p>Total Scans in DB: {{ scan_stats.total|default:"0" }}</p>
+            <p>High Vulnerabilities: {{ vulnerability_stats.high|default:"0" }}</p>
+            <p>Recent Scans Count: {{ recent_scans|length }}</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!-- sast_report/templates/sast_report/scan_report.html -->
+{% extends 'sast_report/base.html' %}
+
+{% block title %}Scan Report - {{ scan_job.repository.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-file-alt me-2"></i>Scan Report
+                    </h4>
+                    <a href="{% url 'sast_report:scan_jobs' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Scans
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="140">Repository:</th>
+                                    <td>{{ scan_job.repository.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Branch:</th>
+                                    <td>{{ scan_job.branch }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        <span class="badge 
+                                            {% if scan_job.status == 'completed' %}bg-success
+                                            {% elif scan_job.status == 'running' %}bg-warning
+                                            {% elif scan_job.status == 'failed' %}bg-danger
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ scan_job.status|title }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Triggered:</th>
+                                    <td>{{ scan_job.triggered_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="140">Findings:</th>
+                                    <td>
+                                        <span class="fw-bold fs-5">{{ scan_job.findings_count }}</span>
+                                        total issues
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Duration:</th>
+                                    <td>{{ scan_job.get_duration_display }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Scan ID:</th>
+                                    <td><code>#{{ scan_job.id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <th>User:</th>
+                                    <td>{{ scan_job.user.username }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Severity Summary -->
+    {% if scan_job.findings_count > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Severity Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col">
+                            <div class="border rounded p-3 bg-danger bg-opacity-10">
+                                <h3 class="text-danger">{{ scan_job.critical_count }}</h3>
+                                <small class="text-muted">CRITICAL</small>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="border rounded p-3 bg-warning bg-opacity-10">
+                                <h3 class="text-warning">{{ scan_job.high_count }}</h3>
+                                <small class="text-muted">HIGH</small>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="border rounded p-3 bg-info bg-opacity-10">
+                                <h3 class="text-info">{{ scan_job.medium_count }}</h3>
+                                <small class="text-muted">MEDIUM</small>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="border rounded p-3 bg-secondary bg-opacity-10">
+                                <h3 class="text-secondary">{{ scan_job.low_count }}</h3>
+                                <small class="text-muted">LOW</small>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="border rounded p-3 bg-light">
+                                <h3 class="text-dark">{{ scan_job.info_count }}</h3>
+                                <small class="text-muted">INFO</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Vulnerabilities List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        Vulnerabilities 
+                        <span class="badge bg-primary ms-2">{{ vulnerabilities.count }}</span>
+                    </h5>
+                    {% if vulnerabilities %}
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportReport('json')">
+                            <i class="fas fa-download me-1"></i>JSON
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportReport('csv')">
+                            <i class="fas fa-download me-1"></i>CSV
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if vulnerabilities %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="vulnerabilitiesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Severity</th>
+                                        <th>Rule ID</th>
+                                        <th>File</th>
+                                        <th>Line</th>
+                                        <th>Message</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for vuln in vulnerabilities %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge 
+                                                {% if vuln.severity == 'CRITICAL' %}bg-danger
+                                                {% elif vuln.severity == 'HIGH' %}bg-warning
+                                                {% elif vuln.severity == 'MEDIUM' %}bg-info
+                                                {% elif vuln.severity == 'LOW' %}bg-secondary
+                                                {% else %}bg-light text-dark{% endif %}">
+                                                {{ vuln.severity }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <code>{{ vuln.rule_id|truncatechars:30 }}</code>
+                                        </td>
+                                        <td>
+                                            <small>{{ vuln.file_path|truncatechars:40 }}</small>
+                                        </td>
+                                        <td>{{ vuln.line_number }}</td>
+                                        <td>
+                                            <span title="{{ vuln.message }}">
+                                                {{ vuln.message|truncatewords:8 }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                    data-bs-toggle="modal" data-bs-target="#vulnModal{{ vuln.id }}">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Modal for vulnerability details -->
+                                    <div class="modal fade" id="vulnModal{{ vuln.id }}" tabindex="-1">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">
+                                                        <span class="badge 
+                                                            {% if vuln.severity == 'CRITICAL' %}bg-danger
+                                                            {% elif vuln.severity == 'HIGH' %}bg-warning
+                                                            {% elif vuln.severity == 'MEDIUM' %}bg-info
+                                                            {% elif vuln.severity == 'LOW' %}bg-secondary
+                                                            {% else %}bg-light text-dark{% endif %}">
+                                                            {{ vuln.severity }}
+                                                        </span>
+                                                        {{ vuln.rule_id }}
+                                                    </h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <table class="table table-borderless">
+                                                        <tr>
+                                                            <th width="120">File:</th>
+                                                            <td><code>{{ vuln.file_path }}:{{ vuln.line_number }}</code></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Message:</th>
+                                                            <td>{{ vuln.message }}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Description:</th>
+                                                            <td>{{ vuln.description }}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Recommendation:</th>
+                                                            <td>{{ vuln.recommendation }}</td>
+                                                        </tr>
+                                                        {% if vuln.code_snippet %}
+                                                        <tr>
+                                                            <th>Code Snippet:</th>
+                                                            <td>
+                                                                <pre class="bg-light p-2 border rounded"><code>{{ vuln.code_snippet }}</code></pre>
+                                                            </td>
+                                                        </tr>
+                                                        {% endif %}
+                                                    </table>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                            <h4>No Vulnerabilities Found</h4>
+                            <p class="text-muted">
+                                {% if scan_job.findings_count > 0 %}
+                                    Scan found {{ scan_job.findings_count }} issues but no vulnerabilities match the current filters.
+                                {% else %}
+                                    The scan completed successfully with no security issues detected.
+                                {% endif %}
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Info (Hanya tampil di development) -->
+    {% if debug %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <h6 class="card-title mb-0">Debug Information</h6>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0"><code>
+Scan ID: {{ scan_job.id }}
+Database Findings: {{ scan_job.findings_count }}
+Displayed Vulnerabilities: {{ vulnerabilities.count }}
+Scan Status: {{ scan_job.status }}
+Started: {{ scan_job.started_at }}
+Finished: {{ scan_job.finished_at }}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- JavaScript untuk export -->
+<script>
+function exportReport(format) {
+    const scanId = {{ scan_job.id }};
+    const url = `{% url 'sast_report:export_scan_report' scan_job.id %}?format=${format}`;
+    window.location.href = url;
+}
+
+// Initialize DataTables jika ada vulnerability
+{% if vulnerabilities %}
+$(document).ready(function() {
+    $('#vulnerabilitiesTable').DataTable({
+        pageLength: 25,
+        order: [[0, 'desc']], // Sort by severity
+        columnDefs: [
+            { orderable: false, targets: [5] } // Disable sorting for actions column
+        ]
+    });
+});
+{% endif %}
+</script>
+{% endblock %}

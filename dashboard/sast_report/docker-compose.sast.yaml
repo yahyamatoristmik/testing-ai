@@ -1,0 +1,35 @@
+# docker-compose.sast.yml
+version: '3.8'
+
+services:
+  sast-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.sast
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./sast_report:/app/sast_report
+    environment:
+      - DJANGO_SETTINGS_MODULE=dashboard.settings
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+    networks:
+      - sast-network
+
+  semgrep:
+    image: returntocorp/semgrep:latest
+    container_name: semgrep-scanner
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - sast-network
+
+networks:
+  sast-network:
+    driver: bridge
+
+volumes:
+  sast-data:

@@ -1,0 +1,25 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <img src="{% static 'dashboard/opsitech.png' %}" alt="Logo" height="30" style="margin-right: 10px;">
+        Sistem Evaluator & Pentesting Opsitech
+    </a>
+</h1>
+<div style="float: right; margin-top: 8px;">
+    <a href="https://sentinel.investpro.id/sast-report/" target="_blank" 
+       style="background: #79aec8; color: white; padding: 8px 15px; border-radius: 4px; text-decoration: none; font-size: 14px;">
+        📊 SAST Report
+    </a>
+</div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block nav-sidebar %}
+    {% if not is_popup and not is_nav_sidebar_disabled %}
+        {% include "admin/nav_sidebar.html" %}
+    {% endif %}
+{% endblock %}

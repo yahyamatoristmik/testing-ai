@@ -1,0 +1,12 @@
+rules:
+  - id: django-raw-sql
+    pattern: User.objects.raw(...)
+    message: "Potential SQL injection in Django raw query"
+    languages: [python]
+    severity: ERROR
+    
+  - id: django-debug-true
+    pattern: DEBUG = True
+    message: "Debug mode enabled"
+    languages: [python]
+    severity: WARNING

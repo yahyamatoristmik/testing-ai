@@ -1,0 +1,15 @@
+from django.urls import path
+from . import views
+
+app_name = 'dast_reports'
+
+urlpatterns = [
+    path('trigger-zap/<int:scan_id>/', views.trigger_zap_scan_view, name='trigger_zap_scan'),
+
+    path(
+        '<int:scan_id>/report/',
+        views.scan_report_view,
+        name='dastscan_report'  # Pastikan nama ini sesuai
+    ),
+
+]

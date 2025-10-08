@@ -1,0 +1,165 @@
+<!-- dast_reports/templates/admin/dast_reports/_ai_recommendations_content.html -->
+<div class="recommendations-section">
+    <h2 style="margin: 0 0 25px 0; font-size: 24px; color: #333;">
+        <i class="fas fa-lightbulb"></i> AI-Powered Recommendations
+    </h2>
+
+    <!-- Case 1: Processing Status -->
+    {% if scan.ai_analysis_status == 'processing' %}
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p><font color="red">AI analysis is in progress. Please wait...</font></p>
+        <p><small>This may take 30-60 seconds. Retrying automatically if rate limited.</small></p>
+    </div>
+
+    <!-- Case 2: Completed with Recommendations -->
+    {% elif scan.ai_analysis_status == 'completed' and scan.ai_recommendations %}
+        {% with recommendations=scan.ai_recommendations %}
+            
+            <!-- Risk Summary -->
+            {% if recommendations.summary %}
+            <div class="risk-summary">
+                <h3><i class="fas fa-chart-bar"></i> Security Summary</h3>
+                <div class="risk-stats">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ recommendations.summary.total_vulnerabilities }}</div>
+                        <div class="stat-label">Total Vulnerabilities</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ recommendations.summary.risk_score }}</div>
+                        <div class="stat-label">Risk Score</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: 
+                            {% if recommendations.summary.overall_risk == 'High' %}#dc3545
+                            {% elif recommendations.summary.overall_risk == 'Medium' %}#fd7e14
+                            {% elif recommendations.summary.overall_risk == 'Low' %}#17a2b8
+                            {% else %}#6c757d{% endif %}">
+                            {{ recommendations.summary.overall_risk }}
+                        </div>
+                        <div class="stat-label">Overall Risk</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Recommendations by Severity -->
+            {% if recommendations.recommendations_by_severity %}
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #333; margin-bottom: 15px;"><i class="fas fa-layer-group"></i> Recommendations by Severity</h3>
+                
+                {% for severity, items in recommendations.recommendations_by_severity.items %}
+                    {% if items %}
+                    <div style="margin-bottom: 20px;">
+                        <h4 style="color: 
+                            {% if severity == 'high' %}#dc3545
+                            {% elif severity == 'medium' %}#fd7e14
+                            {% elif severity == 'low' %}#17a2b8
+                            {% else %}#6c757d{% endif %}; 
+                            margin-bottom: 10px;">
+                            {{ severity|title }} Priority ({{ items|length }})
+                        </h4>
+                        <ul style="padding-left: 20px;">
+                            {% for item in items %}
+                            <li style="margin-bottom: 5px;">{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Detailed Recommendations -->
+            {% if recommendations.detailed_recommendations %}
+                <h3 style="color: #333; margin-bottom: 20px;"><i class="fas fa-list-alt"></i> Detailed Recommendations</h3>
+                {% for rec in recommendations.detailed_recommendations %}
+                <div class="recommendation-item {{ rec.risk_level|default:'informational' }}">
+                    <h3 class="recommendation-title">
+                        <i class="fas fa-{% if rec.risk_level == 'high' %}exclamation-triangle{% elif rec.risk_level == 'medium' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                        {{ rec.alert|default:"Security Recommendation" }}
+                        <span class="priority-badge priority-{{ rec.risk_level|default:'informational' }}">
+                            {{ rec.risk_level|default:"informational"|title }}
+                        </span>
+                    </h3>
+                    
+                    {% if rec.description %}
+                    <div class="recommendation-content">
+                        <strong>Description:</strong>
+                        <p>{{ rec.description|linebreaksbr }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.recommendation %}
+                    <div class="recommendation-details">
+                        <strong><i class="fas fa-wrench"></i> Recommendation:</strong>
+                        <p>{{ rec.recommendation|linebreaksbr }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.implementation_example %}
+                    <div class="recommendation-details">
+                        <strong><i class="fas fa-code"></i> Implementation Example:</strong>
+                        <pre style="background: #fff; padding: 10px; border-radius: 5px; overflow-x: auto;"><code>{{ rec.implementation_example }}</code></pre>
+                    </div>
+                    {% endif %}
+                    
+                    {% if rec.reference_links %}
+                    <div class="recommendation-details">
+                        <strong><i class="fas fa-external-link-alt"></i> Reference Links:</strong>
+                        <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                            {% for link in rec.reference_links %}
+                            <li><a href="{{ link }}" target="_blank">{{ link }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            
+            <!-- No Specific Recommendations -->
+            {% else %}
+            <div class="no-recommendations">
+                <i class="fas fa-check-circle"></i>
+                <h3>No Specific Recommendations Needed</h3>
+                <p>The AI analysis indicates that the current security posture is good.</p>
+            </div>
+            {% endif %}
+
+        {% endwith %}
+
+    <!-- Case 3: Failed Analysis -->
+    {% elif scan.ai_analysis_status == 'failed' %}
+    <div class="no-recommendations" style="background: #fff3f3; border: 1px solid #ffcdd2;">
+        <i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i>
+        <h3>AI Analysis Failed</h3>
+        <p>Unable to generate AI recommendations. Please try again later.</p>
+        {% if scan.status == 'completed' %}
+        <a href="{% url 'dast_reports:generate_ai_recommendations' scan.id %}" 
+           class="button" 
+           style="display: inline-block; margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">
+            <i class="fas fa-redo"></i> Retry AI Analysis
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Case 4: No Analysis Yet -->
+    {% else %}
+    <div class="no-recommendations">
+        <i class="fas fa-info-circle"></i>
+        <h3>No AI Recommendations Available</h3>
+        <p>AI analysis has not been performed yet for this scan.</p>
+        {% if scan.status == 'completed' %}
+        <a href="{% url 'dast_reports:generate_ai_recommendations' scan.id %}" 
+           class="button" 
+           style="display: inline-block; margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">
+            <i class="fas fa-bolt"></i> Generate AI Recommendations
+        </a>
+        {% else %}
+        <p style="margin-top: 15px; color: #6c757d;">
+            <i class="fas fa-info-circle"></i> Wait for the scan to complete before generating AI recommendations.
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

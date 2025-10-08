@@ -1,0 +1,526 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .report-container {
+        margin: 20px;
+        padding: 30px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .report-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+    }
+    
+    .report-header h1 {
+        margin: 0 0 10px 0;
+        font-size: 32px;
+        font-weight: 600;
+        color: white;
+    }
+    
+    .report-header p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 16px;
+        color: white;
+    }
+    
+    .report-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    
+    .meta-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        border-left: 4px solid;
+        color: #000000;
+    }
+    
+    .meta-card.target { border-left-color: #667eea; }
+    .meta-card.status { border-left-color: #28a745; }
+    .meta-card.date { border-left-color: #ffc107; }
+    .meta-card.build { border-left-color: #17a2b8; }
+    
+    .meta-card h3 {
+        margin: 0 0 8px 0;
+        font-size: 14px;
+        text-transform: uppercase;
+        color: #666;
+        font-weight: 600;
+    }
+    
+    .meta-card p {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 500;
+        color: #000000;
+    }
+    
+    .vulnerability-summary {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        margin-bottom: 30px;
+        color: #000000;
+    }
+    
+    .vuln-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .vuln-stat {
+        padding: 20px;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    
+    .vuln-high { 
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+        color: white;
+    }
+    .vuln-medium { 
+        background: linear-gradient(135deg, #fd7e14 0%, #e36209 100%);
+        box-shadow: 0 4px 15px rgba(253, 126, 20, 0.3);
+        color: white;
+    }
+    .vuln-low { 
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+        color: #000000;
+    }
+    .vuln-info { 
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        box-shadow: 0 4px 15px rgba(23, 162, 184, 0.3);
+        color: white;
+    }
+    
+    .vuln-count {
+        font-size: 28px;
+        margin: 0;
+    }
+    
+    .vuln-label {
+        font-size: 14px;
+        opacity: 0.9;
+        margin: 5px 0 0 0;
+    }
+    
+    .vuln-item {
+        margin-bottom: 20px;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        border-left: 5px solid;
+        background: white;
+        transition: transform 0.2s, box-shadow 0.2s;
+        color: #000000;
+    }
+    
+    .vuln-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .vuln-high-item { border-left-color: #dc3545; }
+    .vuln-medium-item { border-left-color: #fd7e14; }
+    .vuln-low-item { border-left-color: #ffc107; }
+    .vuln-info-item { border-left-color: #17a2b8; }
+    
+    .vuln-title {
+        margin: 0 0 15px 0;
+        font-size: 22px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #000000;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        padding: 10px 0;
+        border-bottom: 2px solid #f1f1f1;
+    }
+    
+    .vuln-high-item .vuln-title { border-bottom-color: #dc3545; }
+    .vuln-medium-item .vuln-title { border-bottom-color: #fd7e14; }
+    .vuln-low-item .vuln-title { border-bottom-color: #ffc107; }
+    .vuln-info-item .vuln-title { border-bottom-color: #17a2b8; }
+    
+    .risk-badge {
+        padding: 8px 16px;
+        border-radius: 25px;
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .risk-high { 
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        border: 2px solid #dc3545;
+    }
+    
+    .risk-medium { 
+        background: linear-gradient(135deg, #fd7e14 0%, #e36209 100%);
+        color: white;
+        border: 2px solid #fd7e14;
+    }
+    
+    .risk-low { 
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+        color: #000000;
+        border: 2px solid #ffc107;
+    }
+    
+    .risk-info { 
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        border: 2px solid #17a2b8;
+    }
+    
+    .vuln-detail {
+        margin: 12px 0;
+        line-height: 1.6;
+        color: #000000;
+    }
+    
+    .vuln-detail strong {
+        color: #000000;
+        display: inline-block;
+        min-width: 120px;
+    }
+    
+    .vuln-description {
+        color: #000000;
+        line-height: 1.6;
+        margin: 15px 0;
+        font-size: 15px;
+    }
+    
+    .vuln-description p {
+        color: #000000;
+        margin: 10px 0;
+    }
+    
+    .vuln-description ul, .vuln-description ol {
+        color: #000000;
+        margin: 10px 0 10px 20px;
+    }
+    
+    .vuln-description li {
+        color: #000000;
+        margin: 5px 0;
+    }
+    
+    .back-button {
+        margin-bottom: 25px;
+    }
+    
+    .back-button a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: transform 0.2s;
+    }
+    
+    .back-button a:hover {
+        transform: translateY(-2px);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .debug-info {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        border-left: 4px solid #6c757d;
+        color: #000000;
+    }
+    
+    .errornote {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 25px;
+    }
+    
+    .errornote h3 {
+        color: white;
+    }
+    
+    .solution-box {
+        background: #e6f7ff;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #1890ff;
+        margin: 15px 0;
+        color: #000000;
+    }
+    
+    .solution-box strong {
+        color: #000000;
+    }
+    
+    .affected-urls {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+        color: #000000;
+    }
+    
+    .affected-urls ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+    
+    .affected-urls li {
+        margin: 5px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        color: #000000;
+    }
+    
+    .html-content {
+        color: #000000;
+    }
+    
+    .html-content p {
+        color: #000000;
+        margin: 10px 0;
+    }
+    
+    .html-content ul, .html-content ol {
+        color: #000000;
+        margin: 10px 0 10px 20px;
+    }
+    
+    .html-content li {
+        color: #000000;
+        margin: 5px 0;
+    }
+    
+    .html-content strong {
+        color: #000000;
+    }
+    
+    .html-content em {
+        color: #000000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="back-button">
+    <a href="{% url 'admin:dast_reports_dastscan_changelist' %}">
+        <i class="fas fa-arrow-left"></i> Back to Scan List
+    </a>
+    <a href="{% url 'admin:dast_reports_dastscan_change' scan.id %}">
+        <i class="fas fa-edit"></i> Edit Scan
+    </a>
+</div>
+
+<div class="report-container">
+    <!-- Header -->
+    <div class="report-header">
+        <h1><i class="fas fa-shield-alt"></i> DAST Scan Report</h1>
+        <p>Comprehensive security assessment for {{ scan.target_url }}</p>
+    </div>
+    
+    <!-- Metadata Cards -->
+    <div class="report-meta">
+        <div class="meta-card target">
+            <h3><i class="fas fa-globe"></i> Target URL</h3>
+            <p>{{ scan.target_url }}</p>
+        </div>
+        
+        <div class="meta-card status">
+            <h3><i class="fas fa-status"></i> Status</h3>
+            <p>{{ scan.get_status_display }}</p>
+        </div>
+        
+        <div class="meta-card date">
+            <h3><i class="fas fa-calendar"></i> Scan Date</h3>
+            <p>{{ scan.scan_date|date:"M. d, Y, H:i" }}</p>
+        </div>
+        
+        <div class="meta-card build">
+            <h3><i class="fas fa-cog"></i> Build Number</h3>
+            <p>{{ scan.jenkins_build_number|default:"N/A" }}</p>
+        </div>
+    </div>
+    
+    <!-- Vulnerability Summary -->
+    <div class="vulnerability-summary">
+        <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #000000;">
+            <i class="fas fa-chart-pie"></i> Vulnerability Summary
+        </h2>
+        
+        <div class="vuln-stats">
+            <div class="vuln-stat vuln-high">
+                <p class="vuln-count">{{ scan.high_vulnerabilities }}</p>
+                <p class="vuln-label">HIGH RISK</p>
+            </div>
+            
+            <div class="vuln-stat vuln-medium">
+                <p class="vuln-count">{{ scan.medium_vulnerabilities }}</p>
+                <p class="vuln-label">MEDIUM RISK</p>
+            </div>
+            
+            <div class="vuln-stat vuln-low">
+                <p class="vuln-count">{{ scan.low_vulnerabilities }}</p>
+                <p class="vuln-label">LOW RISK</p>
+            </div>
+            
+            <div class="vuln-stat vuln-info">
+                <p class="vuln-count">{{ scan.informational_vulnerabilities }}</p>
+                <p class="vuln-label">INFORMATIONAL</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Detailed Findings -->
+    {% if report_data.error %}
+        <div class="errornote">
+            <h3 style="margin: 0 0 15px 0; font-size: 20px;">
+                <i class="fas fa-exclamation-triangle"></i> Error: {{ report_data.error }}
+            </h3>
+            
+            <div class="debug-info">
+                <h4 style="margin: 0 0 10px 0; color: #000000;">Debug Information:</h4>
+                <p><strong>Scan ID:</strong> {{ scan.id }}</p>
+                <p><strong>Build Number:</strong> {{ scan.jenkins_build_number|default:"N/A" }}</p>
+                <p><strong>Stored JSON Path:</strong> {{ scan.json_report_path|default:"N/A" }}</p>
+                <p><strong>Selected Path:</strong> {{ json_report_path|default:"N/A" }}</p>
+                
+                {% if report_data.scan_info %}
+                    <h4 style="margin: 15px 0 10px 0; color: #000000;">Scan Info:</h4>
+                    <pre style="margin: 0; white-space: pre-wrap; color: #000000;">{{ report_data.scan_info|pprint }}</pre>
+                {% endif %}
+            </div>
+            
+            <div class="solution-box">
+                <h4 style="margin: 0 0 10px 0; color: #000000;">
+                    <i class="fas fa-lightbulb"></i> Possible Solutions:
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; color: #000000;">
+                    <li>Pastikan scan sudah selesai di Jenkins</li>
+                    <li>Periksa apakah file JSON report ada di direktori yang benar</li>
+                    <li>Jalankan action "Update vulnerabilities from JSON" terlebih dahulu</li>
+                    <li>Periksa konfigurasi path di settings.py</li>
+                </ul>
+            </div>
+        </div>
+        
+    {% elif report_data.site %}
+        <h2 style="margin: 0 0 25px 0; font-size: 24px; padding-bottom: 10px; border-bottom: 2px solid #e9ecef; color: #000000;">
+            <i class="fas fa-bug"></i> Detailed Findings
+        </h2>
+        
+        {% for site in report_data.site %}
+            {% for alert in site.alerts %}
+                <div class="vuln-item vuln-{% if alert.riskcode == '3' %}high{% elif alert.riskcode == '2' %}medium{% elif alert.riskcode == '1' %}low{% else %}info{% endif %}-item">
+                    <h3 class="vuln-title">
+                        <i class="fas fa-{% if alert.riskcode == '3' %}exclamation-triangle{% elif alert.riskcode == '2' %}exclamation-circle{% elif alert.riskcode == '1' %}info-circle{% else %}info{% endif %}"></i>
+                        {{ alert.name }}
+                        <span class="risk-badge risk-{% if alert.riskcode == '3' %}high{% elif alert.riskcode == '2' %}medium{% elif alert.riskcode == '1' %}low{% else %}info{% endif %}">
+                            {{ alert.riskdesc }}
+                        </span>
+                    </h3>
+                    
+                    <div class="vuln-detail">
+                        <strong><i class="fas fa-file-alt"></i> Description:</strong>
+                    </div>
+                    
+                    <div class="vuln-description html-content">
+                        {{ alert.desc|safe }}
+                    </div>
+                    
+                    {% if alert.solution %}
+                    <div class="solution-box">
+                        <strong><i class="fas fa-wrench"></i> Solution:</strong>
+                        <div class="html-content">
+                            {{ alert.solution|safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="vuln-detail">
+                        <strong><i class="fas fa-hashtag"></i> Instances Found:</strong>
+                        {{ alert.count }}
+                    </div>
+                    
+                    {% if alert.instances %}
+                    <div class="affected-urls">
+                        <strong><i class="fas fa-link"></i> Affected URLs:</strong>
+                        <ul>
+                            {% for instance in alert.instances %}
+                                <li>{{ instance.uri }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% endfor %}
+        
+    {% else %}
+        <div style="text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); color: #000000;">
+            <i class="fas fa-check-circle" style="font-size: 48px; color: #28a745; margin-bottom: 15px;"></i>
+            <h3 style="margin: 0 0 10px 0; color: #000000;">No vulnerability data found in the report.</h3>
+            <p style="margin: 0; color: #000000;">The scan completed successfully but no vulnerabilities were detected.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extrajs %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Smooth scrolling untuk anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends 'sast_report/base.html' %}
+
+{% block title %}SCM Configuration{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>⚙️ SCM Configuration</h1>
+        <p class="text-muted">Configure your Source Code Management integration</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>SCM Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                        <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% if field.errors %}
+                        <div class="text-danger">{{ field.errors }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    
+                    <button type="submit" class="btn btn-success">
+                        💾 Save Configuration & Sync Repositories
+                    </button>
+                    <a href="{% url 'sast_report:dashboard' %}" class="btn btn-outline-secondary">
+                        ← Back to Dashboard
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <h5>SCM Status</h5>
+            </div>
+            <div class="card-body">
+                {% if scm_profile and scm_profile.id %}
+                <p><strong>Status:</strong> <span class="badge bg-success">Configured</span></p>
+                <p><strong>Type:</strong> {{ scm_profile.scm_type|title }}</p>
+                <p><strong>Username:</strong> {{ scm_profile.username }}</p>
+                <p><strong>Repositories:</strong> {{ repositories.count }} synced</p>
+                
+                <!-- Manual Sync Button ← TAMBAH INI -->
+                <form method="post" action="{% url 'sast_report:manual_sync' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                        🔄 Sync Repositories Now
+                    </button>
+                </form>
+                {% else %}
+                <p><strong>Status:</strong> <span class="badge bg-warning">Not Configured</span></p>
+                <p>Please configure your SCM integration to start scanning repositories.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Repositories List -->
+        {% if repositories %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6>Synced Repositories</h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for repo in repositories|slice:":5" %}
+                    <div class="list-group-item">
+                        <strong>{{ repo.name }}</strong>
+                        <br>
+                        <small class="text-muted">
+                            Branch: <code>{{ repo.default_branch }}</code>
+                            {% if repo.private %}<span class="badge bg-secondary ms-1">Private</span>{% endif %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                    {% if repositories.count > 5 %}
+                    <div class="list-group-item text-center">
+                        <small class="text-muted">+ {{ repositories.count|add:"-5" }} more repositories</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

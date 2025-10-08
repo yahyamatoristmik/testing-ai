@@ -1,0 +1,81 @@
+import os
+import sys
+import django
+from datetime import datetime
+
+# Setup Django
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(project_root)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dashboard.settings')
+django.setup()
+
+from sast_report.models import ScanJob, UserSCMProfile
+from django.contrib.auth.models import User
+
+def trigger_new_scan():
+    print("🚀 TRIGGERING NEW SCAN JOB")
+    print("=" * 50)
+    
+    # Get or create test user
+    try:
+        user = User.objects.get(username='sast_test_user')
+    except User.DoesNotExist:
+        user = User.objects.create_user(
+            username='sast_test_user',
+            email='test@example.com',
+            password='testpass123'
+        )
+        print("✅ Created test user")
+    
+    # Get SCM profile
+    scm_profile = UserSCMProfile.objects.filter(user=user).first()
+    if not scm_profile:
+        scm_profile = UserSCMProfile.objects.create(
+            user=user,
+            scm_type='github',
+            access_token='test-token-123',
+            username='testuser'
+        )
+        print("✅ Created SCM profile")
+    
+    # Create new scan job
+    new_scan = ScanJob.objects.create(
+        user=user,
+        scm_profile=scm_profile,
+        repository_url='https://github.com/testuser/test-repo.git',
+        target_branch='main',
+        status='queued'
+    )
+    
+    print(f"✅ NEW SCAN JOB CREATED:")
+    print(f"   - Scan ID: #{new_scan.id}")
+    print(f"   - Repository: {new_scan.repository_url}")
+    print(f"   - Branch: {new_scan.target_branch}")
+    print(f"   - Status: {new_scan.status}")
+    print(f"   - Created: {new_scan.created_at}")
+    
+    return new_scan.id
+
+def check_system_status():
+    """Check current system status"""
+    from sast_report.models import ScanJob, VulnerabilityReport
+    
+    print("\n📊 SYSTEM STATUS:")
+    total_scans = ScanJob.objects.count()
+    queued = ScanJob.objects.filter(status='queued').count()
+    in_progress = ScanJob.objects.filter(status='in_progress').count()
+    completed = ScanJob.objects.filter(status='completed').count()
+    
+    print(f"   - Total scans: {total_scans}")
+    print(f"   - Queued: {queued}")
+    print(f"   - In Progress: {in_progress}")
+    print(f"   - Completed: {completed}")
+    print(f"   - Vulnerabilities: {VulnerabilityReport.objects.count()}")
+
+if __name__ == '__main__':
+    check_system_status()
+    print("\n" + "=" * 50)
+    scan_id = trigger_new_scan()
+    print("\n" + "=" * 50)
+    print(f"🎯 Scan #{scan_id} is now QUEUED and ready for processing!")
+    print("💡 Keep the worker running to process this scan automatically.")
