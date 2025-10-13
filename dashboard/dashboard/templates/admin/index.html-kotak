@@ -1,0 +1,46 @@
+<!-- templates/admin/index.html -->
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+<style>
+/* Hilangkan sidebar navigation di kiri */
+#nav-sidebar {
+    display: none !important;
+}
+
+/* Expand content area */
+#content {
+    margin-left: 0 !important;
+    width: 100% !important;
+}
+
+.main.shifted #content {
+    margin-left: 0 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="padding: 20px;">
+  <h1>Security Scanner Dashboard</h1>
+  
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 30px;">
+    {% for app in app_list %}
+      <div style="border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
+        <h3 style="margin-top: 0;">{{ app.name }}</h3>
+        <ul style="list-style: none; padding: 0;">
+          {% for model in app.models %}
+            <li style="margin: 10px 0;">
+              <a href="{{ model.admin_url }}" style="text-decoration: none; color: #417690;">
+                📊 {{ model.name }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block sidebar %}{% endblock %}

@@ -1,0 +1,355 @@
+<<<<<<< HEAD
+{% extends 'sast_report/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-800">Security Dashboard</h1>
+    <p class="text-gray-600">Monitor your code security scans and findings</p>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+        <div class="flex items-center">
+            <i class="fas fa-shield-alt text-blue-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Total Scans</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ total_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+        <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Completed</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ completed_scans }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+        <div class="flex items-center">
+            <i class="fas fa-bug text-red-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">Critical</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ severity_stats.critical }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle text-orange-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-700">High</h3>
+                <p class="text-2xl font-bold text-gray-900">{{ severity_stats.high }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- SCM Profiles -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+            <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                <i class="fab fa-github mr-3 text-gray-600"></i>
+                SCM Profiles
+            </h2>
+        </div>
+        <div class="p-6">
+            {% if scm_profiles %}
+                <div class="space-y-3">
+                    {% for profile in scm_profiles %}
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                        <div>
+                            <span class="font-medium">{{ profile.scm_type|title }}</span>
+                            <span class="text-gray-600 text-sm ml-2">@{{ profile.username }}</span>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full 
+                            {% if profile.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ profile.is_active|yesno:"Active,Inactive" }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 text-center py-4">No SCM profiles configured</p>
+            {% endif %}
+            <div class="mt-4">
+                <a href="{% url 'sast_report:scm_profiles' %}" 
+                   class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i>Manage SCM Profiles
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b">
+            <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                <i class="fas fa-history mr-3 text-gray-600"></i>
+                Recent Scans
+            </h2>
+        </div>
+        <div class="p-6">
+            {% if recent_scans %}
+                <div class="space-y-3">
+                    {% for scan in recent_scans %}
+                    <div class="flex justify-between items-center p-3 border rounded">
+                        <div>
+                            <div class="font-medium">{{ scan.repository.name }}</div>
+                            <div class="text-sm text-gray-600">{{ scan.created_at|date:"M d, Y H:i" }}</div>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full 
+                            {% if scan.status == 'completed' %}bg-green-100 text-green-800
+                            {% elif scan.status == 'running' %}bg-blue-100 text-blue-800
+                            {% elif scan.status == 'failed' %}bg-red-100 text-red-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ scan.status|title }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 text-center py-4">No scans yet</p>
+            {% endif %}
+            <div class="mt-4">
+                <a href="{% url 'sast_report:scan_history' %}" 
+                   class="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-list mr-2"></i>View All Scans
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Repositories -->
+<div class="bg-white rounded-lg shadow">
+    <div class="p-6 border-b">
+        <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+            <i class="fas fa-code-branch mr-3 text-gray-600"></i>
+            Your Repositories
+        </h2>
+    </div>
+    <div class="p-6">
+        {% if repositories %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for repo in repositories %}
+                <div class="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-start mb-3">
+                        <h3 class="font-semibold text-lg">{{ repo.name }}</h3>
+                        <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                            {{ repo.scm_profile.scm_type }}
+                        </span>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-3">{{ repo.url }}</p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-500">Branch: {{ repo.default_branch }}</span>
+                        <a href="{% url 'sast_report:start_scan' repo.id %}" 
+                           class="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded text-sm">
+                            <i class="fas fa-play mr-1"></i>Scan
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 text-center py-4">No repositories found</p>
+        {% endif %}
+        <div class="mt-6">
+            <a href="{% url 'sast_report:repositories' %}" 
+               class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg inline-flex items-center">
+                <i class="fas fa-eye mr-2"></i>View All Repositories
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+=======
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAST Dashboard - NO CACHE</title>
+    <meta charset="utf-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            border-radius: 10px;
+        }
+        .stats { 
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 20px; 
+            margin: 30px 0; 
+        }
+        .stat { 
+            background: #fff; 
+            padding: 25px; 
+            border-radius: 10px; 
+            text-align: center; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border: 2px solid transparent;
+            transition: transform 0.3s, border-color 0.3s;
+        }
+        .stat:hover {
+            transform: translateY(-5px);
+            border-color: #3498db;
+        }
+        .stat.high { border-left: 6px solid #e74c3c; }
+        .stat.medium { border-left: 6px solid #f39c12; }
+        .stat h3 { font-size: 2.5em; margin: 0; }
+        .stat p { margin: 10px 0 0; font-weight: bold; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 30px 0; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td { 
+            padding: 15px; 
+            text-align: left; 
+            border-bottom: 1px solid #ecf0f1; 
+        }
+        th { 
+            background: #2c3e50; 
+            color: white; 
+            font-weight: bold;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .success { color: #27ae60; font-weight: bold; }
+        .warning { color: #f39c12; font-weight: bold; }
+        .danger { color: #e74c3c; font-weight: bold; }
+        .debug {
+            margin-top: 30px; 
+            padding: 20px; 
+            background: #ecf0f1; 
+            border-radius: 10px;
+            border-left: 6px solid #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 SAST SECURITY DASHBOARD</h1>
+            <p>Real-time Security Scanning & Analysis</p>
+            <p><strong>Loaded at:</strong> {% now "F j, Y H:i:s" %}</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <h3 style="color: #2c3e50;">{{ scan_stats.total|default:"0" }}</h3>
+                <p>Total Scans</p>
+            </div>
+            <div class="stat">
+                <h3 class="success">{{ scan_stats.completed|default:"0" }}</h3>
+                <p>Completed</p>
+            </div>
+            <div class="stat high">
+                <h3 class="danger">{{ vulnerability_stats.high|default:"0" }}</h3>
+                <p>High Risk Issues</p>
+            </div>
+            <div class="stat medium">
+                <h3 class="warning">{{ vulnerability_stats.medium|default:"0" }}</h3>
+                <p>Medium Risk Issues</p>
+            </div>
+        </div>
+
+        <h2>📊 Recent Security Scans</h2>
+        {% if recent_scans %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Scan ID</th>
+                    <th>Repository</th>
+                    <th>Status</th>
+                    <th>Security Findings</th>
+                    <th>Initiated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in recent_scans %}
+                <tr>
+                    <td><strong>#{{ scan.id }}</strong></td>
+                    <td>{{ scan.repository.name }}</td>
+                    <td>
+                        <span class="{% if scan.status == 'completed' %}success{% elif scan.status == 'running' %}warning{% else %}danger{% endif %}">
+                            🔄 {{ scan.status|upper }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="{% if scan.findings_count > 0 %}danger{% else %}success{% endif %}">
+                            {% if scan.findings_count > 0 %}
+                            ⚠️ {{ scan.findings_count }} security issues
+                            {% else %}
+                            ✅ No issues found
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>{{ scan.triggered_at|date:"M d, Y H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 10px;">
+            <h3 style="color: #7f8c8d;">No security scans available</h3>
+            <p>Start your first security scan to see results here.</p>
+        </div>
+        {% endif %}
+        
+        <div class="debug">
+            <h3>🔧 System Information</h3>
+            <p><strong>Database Records:</strong> {{ scan_stats.total|default:"0" }} scans, {{ vulnerability_stats.total|default:"0" }} vulnerabilities</p>
+            <p><strong>Scan Status:</strong> {{ scan_stats.completed|default:"0" }} completed, {{ scan_stats.running|default:"0" }} running, {{ scan_stats.pending|default:"0" }} pending</p>
+            <p><strong>Risk Distribution:</strong> {{ vulnerability_stats.high|default:"0" }} high, {{ vulnerability_stats.medium|default:"0" }} medium, {{ vulnerability_stats.low|default:"0" }} low</p>
+            <p><strong>Template:</strong> dashboard_nocache.html | <strong>Cache:</strong> Disabled</p>
+        </div>
+    </div>
+    
+    <script>
+        console.log("🚀 SAST Dashboard loaded successfully!");
+        console.log("Scans: {{ scan_stats.total|default:"0" }}, High Issues: {{ vulnerability_stats.high|default:"0" }}");
+        
+        // Auto-refresh every 30 seconds
+        setTimeout(() => {
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
+>>>>>>> 98ddaa4 (orogin)

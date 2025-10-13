@@ -29,10 +29,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'dashboard',
+#    'dashboard',
     'message',
     'dast_reports',
     'sast_report',
+    'data_leak',
+    'darkweb_monitor',
 ]
 
 MIDDLEWARE = [

@@ -8,8 +8,8 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_protect
 
 def index(request):
-    """Home page"""
-    return redirect('sast_report:dashboard')
+    """Home page - TAMPILKAN FRONTEND"""
+    return render(request, 'dashboard/index.html')  # ✅ PERBAIKAN DI SINI
 
 @csrf_protect
 def custom_logout(request):

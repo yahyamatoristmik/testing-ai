@@ -1,0 +1,13 @@
+/* Hilangkan Recent Actions sidebar */
+div.colMS {
+    margin-right: 0 !important;
+}
+
+#content-related {
+    display: none !important;
+}
+
+#content {
+    width: 100% !important;
+    margin-right: 0 !important;
+}

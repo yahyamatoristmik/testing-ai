@@ -1,0 +1,27 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div id="content-main">
+  <div class="app-dashboard">
+    {% for app in app_list %}
+      <div class="app-module">
+        <h2>{{ app.name }}</h2>
+        <table>
+          <tbody>
+            {% for model in app.models %}
+              <tr>
+                <td>
+                  <a href="{{ model.admin_url }}">{{ model.name }}</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{# INI YANG MENGHILANGKAN RECENT ACTIONS #}
+{% block sidebar %}{% endblock %}

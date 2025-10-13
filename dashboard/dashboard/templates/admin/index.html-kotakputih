@@ -1,0 +1,82 @@
+<!-- templates/admin/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Security Scanner Admin</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .header {
+            background: #417690;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .app-card {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .app-card h3 {
+            margin-top: 0;
+            color: #417690;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .model-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .model-list li {
+            margin: 8px 0;
+        }
+        .model-list a {
+            text-decoration: none;
+            color: #333;
+            padding: 8px 12px;
+            display: block;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .model-list a:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔒 Security Scanner Dashboard</h1>
+        <p>Manage your security scans and results</p>
+    </div>
+
+    <div class="dashboard-grid">
+        {% for app in app_list %}
+        <div class="app-card">
+            <h3>{{ app.name }}</h3>
+            <ul class="model-list">
+                {% for model in app.models %}
+                <li>
+                    <a href="{{ model.admin_url }}">
+                        📊 {{ model.name }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

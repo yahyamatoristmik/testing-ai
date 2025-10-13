@@ -1,7 +1,9 @@
 {% load i18n %}
 
 {% if app_list %}
+  {% comment %} Tampilkan semua app KECUALI Data_Leak dan Darkweb_monitor dulu {% endcomment %}
   {% for app in app_list %}
+    {% if app.app_label != "data_leak" and app.name != "Data_Leak" and app.app_label != "darkweb_monitor" and app.name != "Darkweb_monitor" %}
     <div class="app-{{ app.app_label }} module{% if app.app_url in request.path %} current-app{% endif %}">
       <table>
         <caption>
@@ -10,7 +12,6 @@
           </a>
         </caption>
         
-        {% comment %} Tambahkan link SAST Report khusus untuk app Sast_Report {% endcomment %}
         {% if app.app_label == "sast_report" or app.name == "Sast_Report" or "sast" in app.app_label|lower %}
         <tr>
           <td colspan="3" style="padding: 8px; background: #3b82f6; border-bottom: 1px solid #264b5d;">
@@ -47,7 +48,107 @@
         {% endfor %}
       </table>
     </div>
+    {% endif %}
   {% endfor %}
+  
+  {% comment %} Tampilkan Data_Leak {% endcomment %}
+  {% for app in app_list %}
+    {% if app.app_label == "data_leak" or app.name == "Data_Leak" %}
+    <div class="app-{{ app.app_label }} module{% if app.app_url in request.path %} current-app{% endif %}">
+      <table>
+        <caption>
+          <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">
+            {{ app.name }}
+          </a>
+        </caption>
+        
+        {% comment %} Link VIEW DATA LEAK DASHBOARD {% endcomment %}
+        <tr>
+          <td colspan="3" style="padding: 8px; background: #10b981; border-bottom: 1px solid #0a7c5a;">
+            <a href="https://sentinel.investpro.id/data-leak/dashboard/" target="_blank" 
+              style="color: #ffc; text-decoration: none; font-weight: bold; display: block; text-align: left; font-size: 12px;">&nbsp VIEW DATA LEAK DASHBOARD
+          </td>
+        </tr>
+        
+        {% for model in app.models %}
+          <tr class="model-{{ model.object_name|lower }}{% if model.admin_url in request.path %} current-model{% endif %}">
+            {% if model.admin_url %}
+              <th scope="row"><a href="{{ model.admin_url }}"{% if model.admin_url in request.path %} aria-current="page"{% endif %}>{{ model.name }}</a></th>
+            {% else %}
+              <th scope="row">{{ model.name }}</th>
+            {% endif %}
+
+            {% if model.add_url %}
+              <td><a href="{{ model.add_url }}" class="addlink">{% translate 'Add' %}</a></td>
+            {% else %}
+              <td></td>
+            {% endif %}
+
+            {% if model.admin_url and show_changelinks %}
+              {% if model.view_only %}
+                <td><a href="{{ model.admin_url }}" class="viewlink">{% translate 'View' %}</a></td>
+              {% else %}
+                <td><a href="{{ model.admin_url }}" class="changelink">{% translate 'Change' %}</a></td>
+              {% endif %}
+            {% elif show_changelinks %}
+              <td></td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  {% endfor %}
+  
+  {% comment %} Tampilkan Darkweb_monitor di PALING BAWAH {% endcomment %}
+  {% for app in app_list %}
+    {% if app.app_label == "darkweb_monitor" or app.name == "Darkweb_monitor" %}
+    <div class="app-{{ app.app_label }} module{% if app.app_url in request.path %} current-app{% endif %}">
+      <table>
+        <caption>
+          <a href="{{ app.app_url }}" class="section" title="{% blocktranslate with name=app.name %}Models in the {{ name }} application{% endblocktranslate %}">
+            {{ app.name }}
+          </a>
+        </caption>
+        
+        {% comment %} Link VIEW DARK WEB MONITOR {% endcomment %}
+        <tr>
+          <td colspan="3" style="padding: 8px; background: #8b5cf6; border-bottom: 1px solid #6d28d9;">
+            <a href="https://sentinel.investpro.id/darkweb-monitor/dashboard/" target="_blank" 
+              style="color: #ffc; text-decoration: none; font-weight: bold; display: block; text-align: left; font-size: 12px;">&nbsp VIEW DARK WEB MONITOR
+          </td>
+        </tr>
+        
+        {% for model in app.models %}
+          <tr class="model-{{ model.object_name|lower }}{% if model.admin_url in request.path %} current-model{% endif %}">
+            {% if model.admin_url %}
+              <th scope="row"><a href="{{ model.admin_url }}"{% if model.admin_url in request.path %} aria-current="page"{% endif %}>{{ model.name }}</a></th>
+            {% else %}
+              <th scope="row">{{ model.name }}</th>
+            {% endif %}
+
+            {% if model.add_url %}
+              <td><a href="{{ model.add_url }}" class="addlink">{% translate 'Add' %}</a></td>
+            {% else %}
+              <td></td>
+            {% endif %}
+
+            {% if model.admin_url and show_changelinks %}
+              {% if model.view_only %}
+                <td><a href="{{ model.admin_url }}" class="viewlink">{% translate 'View' %}</a></td>
+              {% else %}
+                <td><a href="{{ model.admin_url }}" class="changelink">{% translate 'Change' %}</a></td>
+              {% endif %}
+            {% elif show_changelinks %}
+              <td></td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+  {% endfor %}
+  
 {% else %}
-  <p>{% translate 'You don’t have permission to view or edit anything.' %}</p>
+  <p>{% translate "You don't have permission to view or edit anything." %}</p>
 {% endif %}

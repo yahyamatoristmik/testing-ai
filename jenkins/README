@@ -1,0 +1,369 @@
+1.String parameterized = TARGET_URL
+2.String Parameterized = SCAN_NAME
+3. trigger build remotes = authenticated Token => blablalba
+4. script
+pipeline {
+    agent { label 'server-jenkins' }
+
+    parameters {
+        string(name: 'TARGET_URL', defaultValue: '', description: 'Target URL untuk di-scan (harus dengan http:// atau https://)')
+        string(name: 'SCAN_NAME', defaultValue: 'DAST Automated Scan', description: 'Nama scan untuk identifikasi')
+    }
+
+    environment {
+        ZAP_REPORT_DIR = "${WORKSPACE}/zap-reports"
+        ZAP_CONTAINER_NAME = "zap-scan-${BUILD_NUMBER}"
+        JSON_FILE = "zap-report-${BUILD_NUMBER}.json"
+        SUMMARY_FILE = "vulnerability-summary-${BUILD_NUMBER}.txt"
+        DJANGO_MANAGE_DIR = "/home/dj/ai-evaluator/dashboard"
+        PYTHON_PATH = "/usr/bin/python3"
+    }
+
+    stages {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.TARGET_URL) {
+                        error("ERROR: TARGET_URL harus diisi! Gunakan format: https://example.com")
+                    }
+                    if (!params.TARGET_URL.startsWith('http://') && !params.TARGET_URL.startsWith('https://')) {
+                        error("ERROR: TARGET_URL harus dimulai dengan http:// atau https://")
+                    }
+                    echo "Target URL: ${params.TARGET_URL}"
+                    echo "Scan Name: ${params.SCAN_NAME}"
+                }
+            }
+        }
+
+        stage('Cleanup Previous Containers') {
+            steps {
+                script {
+                    echo "=== Cleaning up previous ZAP containers ==="
+                    sh '''
+                        docker stop ${ZAP_CONTAINER_NAME} 2>/dev/null || true
+                        docker rm -f ${ZAP_CONTAINER_NAME} 2>/dev/null || true
+                        docker ps -q --filter "name=zap-scan-" | xargs -r docker stop 2>/dev/null || true
+                        docker ps -a -q --filter "name=zap-scan-" | xargs -r docker rm -f 2>/dev/null || true
+                        echo "Cleanup completed"
+                    '''
+                }
+            }
+        }
+
+        stage('Prepare Directory') {
+            steps {
+                sh """
+                    mkdir -p ${ZAP_REPORT_DIR}
+                    chmod 777 ${ZAP_REPORT_DIR}
+                    cd ${ZAP_REPORT_DIR}
+                    echo "Report directory: ${ZAP_REPORT_DIR}"
+                """
+            }
+        }
+
+       stage('Create DB Record') {
+            steps {
+                script {
+                    echo "Membuat/mencari record scan di database Django..."
+                    env.SCAN_ID = sh(script: """
+                        cd ${DJANGO_MANAGE_DIR}
+                        ${PYTHON_PATH} manage.py get_or_create_scan \\
+                            --target-url="${params.TARGET_URL}" \\
+                            --scan-name="${params.SCAN_NAME}" \\
+                            --quiet
+                    """, returnStdout: true).trim()
+                    
+                    echo "Using scan ID: ${SCAN_ID}"
+                }
+            }
+        }
+
+        stage('Update Scan Metadata') {
+            steps {
+                script {
+                    // Update scan dengan build number menggunakan SCAN_ID dari stage sebelumnya
+                    sh """
+                        cd ${DJANGO_MANAGE_DIR}
+                        ${PYTHON_PATH} manage.py update_scan_build_number \\
+                            --scan-id=${SCAN_ID} \\
+                            --build-number=${BUILD_NUMBER} \\
+                            --json-path=${ZAP_REPORT_DIR}/${JSON_FILE} \\
+                            --quiet
+                    """
+                    
+                    echo "Updated scan ${SCAN_ID} with build number ${BUILD_NUMBER}"
+                }
+            }
+        }
+
+        stage('Run ZAP Scan') {
+            steps {
+                script {
+                    // Create a separate script file to avoid heredoc issues
+                    writeFile file: "${WORKSPACE}/run_zap_scan.sh", text: """#!/bin/bash
+cd ${ZAP_REPORT_DIR}
+                        
+echo "=== Running ZAP Simple Scan ==="
+
+# Simpan waktu mulai
+START_TIME=\$(date +%s)
+
+# Jalankan ZAP scan dengan parameter yang benar untuk JSON output
+docker run --rm \\
+  --name ${ZAP_CONTAINER_NAME} \\
+  -v ${ZAP_REPORT_DIR}:/zap/wrk \\
+  zaproxy/zap-stable \\
+  zap-baseline.py \\
+  -t "${params.TARGET_URL}" \\
+  -J ${JSON_FILE} \\
+  -d 2> zap-error.log
+
+# Tangani exit code
+SCAN_EXIT_CODE=\$?
+
+# Simpan waktu selesai
+END_TIME=\$(date +%s)
+SCAN_DURATION=\$((END_TIME - START_TIME))
+
+echo "SCAN_DURATION_SECONDS=\$SCAN_DURATION" > scan_metrics.txt
+echo "SCAN_EXIT_CODE=\$SCAN_EXIT_CODE" >> scan_metrics.txt
+echo "=== Scan Completed in \$SCAN_DURATION seconds with exit code \$SCAN_EXIT_CODE ==="
+
+# Cek jika file JSON berhasil dibuat
+if [ -f "${JSON_FILE}" ] && [ -s "${JSON_FILE}" ]; then
+    echo "✅ JSON report created successfully"
+    echo "File size: \$(du -h ${JSON_FILE} | cut -f1)"
+    echo "ZAP Scan Results:"
+    echo "FAIL-NEW: \$(grep 'FAIL-NEW' zap-error.log || echo '0')"
+    echo "WARN-NEW: \$(grep 'WARN-NEW' zap-error.log || echo '0')"
+    echo "PASS: \$(grep 'PASS:' zap-error.log | wc -l || echo '0')"
+else
+    echo "⚠️  JSON report tidak dibuat atau kosong"
+    echo "Error output:"
+    cat zap-error.log
+    echo "Files in directory:"
+    ls -la ${ZAP_REPORT_DIR}/
+    
+    # Create minimal JSON file using a simple approach
+    echo '{"@version": "1.0", "@generated": null, "site": [{"@name": "${params.TARGET_URL}", "@host": "${params.TARGET_URL}", "@port": "443", "@ssl": "true", "alerts": []}]}' > "${JSON_FILE}"
+    echo "Created minimal JSON file"
+fi
+"""
+                    
+                    sh """
+                        chmod +x ${WORKSPACE}/run_zap_scan.sh
+                        ${WORKSPACE}/run_zap_scan.sh
+                    """
+                }
+            }
+        }
+
+        stage('Parse and Update Database') {
+            steps {
+                script {
+                    // First read the scan duration into a Jenkins variable
+                    SCAN_DURATION = sh(script: """
+                        cd ${ZAP_REPORT_DIR}
+                        if [ -f "scan_metrics.txt" ]; then
+                            grep SCAN_DURATION_SECONDS scan_metrics.txt | cut -d'=' -f2
+                        else
+                            echo "0"
+                        fi
+                    """, returnStdout: true).trim()
+                    
+                    echo "Scan duration: ${SCAN_DURATION} seconds"
+                    
+                    sh """
+                        echo "=== Parsing JSON dan Update Database ==="
+                        cd ${ZAP_REPORT_DIR}
+                        
+                        # Gunakan management command dengan SCAN_ID
+                        cd ${DJANGO_MANAGE_DIR}
+                        
+                        ${PYTHON_PATH} manage.py update_dast_vulnerabilities \\
+                            ${ZAP_REPORT_DIR}/${JSON_FILE} \\
+                            "${params.TARGET_URL}" \\
+                            --scan-id=${SCAN_ID}
+                        
+                        # Update scan duration menggunakan management command
+                        ${PYTHON_PATH} manage.py update_scan_duration \\
+                            --scan-id=${SCAN_ID} \\
+                            --duration=${SCAN_DURATION} \\
+                            --quiet
+                    """
+                }
+            }
+        }
+
+        stage('Generate Summary Report') {
+            steps {
+                script {
+                    sh """
+                        echo "=== Generating Summary Report ==="
+                        cd ${ZAP_REPORT_DIR}
+                        
+                        echo "DAST SCAN SUMMARY" > ${SUMMARY_FILE}
+                        echo "=================" >> ${SUMMARY_FILE}
+                        echo "Target: ${params.TARGET_URL}" >> ${SUMMARY_FILE}
+                        echo "Scan Date: \$(date)" >> ${SUMMARY_FILE}
+                        echo "Duration: \$(cat scan_metrics.txt 2>/dev/null | grep SCAN_DURATION_SECONDS | cut -d'=' -f2 || echo 'unknown') seconds" >> ${SUMMARY_FILE}
+                        echo "" >> ${SUMMARY_FILE}
+                        
+                        # Tambahkan summary dari ZAP output
+                        echo "ZAP SCAN RESULTS:" >> ${SUMMARY_FILE}
+                        echo "FAIL-NEW: \$(grep 'FAIL-NEW' zap-error.log 2>/dev/null | head -n1 || echo '0')" >> ${SUMMARY_FILE}
+                        echo "WARN-NEW: \$(grep 'WARN-NEW' zap-error.log 2>/dev/null | head -n1 || echo '0')" >> ${SUMMARY_FILE}
+                        echo "PASS: \$(grep 'PASS:' zap-error.log 2>/dev/null | wc -l || echo '0')" >> ${SUMMARY_FILE}
+                        echo "" >> ${SUMMARY_FILE}
+                        
+                        cd ${DJANGO_MANAGE_DIR}
+                        ${PYTHON_PATH} manage.py shell << 'END_PYTHON' >> ${ZAP_REPORT_DIR}/${SUMMARY_FILE}
+from dast_reports.models import DASTScan
+
+scan = DASTScan.objects.filter(target_url='${params.TARGET_URL}').order_by('-scan_date').first()
+
+if scan:
+    print("DATABASE VULNERABILITY COUNTS:")
+    print(f"High Risk: {scan.high_vulnerabilities}")
+    print(f"Medium Risk: {scan.medium_vulnerabilities}")
+    print(f"Low Risk: {scan.low_vulnerabilities}")
+    print(f"Informational: {scan.informational_vulnerabilities}")
+    print(f"Total: {scan.vulnerabilities_found}")
+    print("")
+    print("SCAN METRICS:")
+    print(f"Duration: {scan.scan_duration}")
+    print(f"Status: {scan.status}")
+    print(f"Risk Score: {getattr(scan, 'risk_score', 'N/A')}")
+else:
+    print("No scan data found in database")
+END_PYTHON
+                    """
+                }
+            }
+        }
+    
+        stage('Debug JSON Structure') {
+            steps {
+                sh """
+                    echo "=== DEBUG: JSON File Structure ==="
+                    cd ${ZAP_REPORT_DIR}
+                    if [ -f "${JSON_FILE}" ]; then
+                        echo "File exists, size: \$(du -h ${JSON_FILE} | cut -f1)"
+                        echo "First 200 characters:"
+                        head -c 200 ${JSON_FILE}
+                        echo ""
+                        echo "JSON keys:"
+                        python3 -c "import json; data=json.load(open('${JSON_FILE}')); print(list(data.keys()))" 2>/dev/null || echo "Cannot parse JSON"
+                    else
+                        echo "JSON file not found!"
+                    fi
+                """
+            }
+        }
+    }
+
+   post {
+    always {
+        echo "=== CLEANUP AND FINALIZATION ==="
+        sh """
+            docker stop ${ZAP_CONTAINER_NAME} 2>/dev/null || true
+            docker rm -f ${ZAP_CONTAINER_NAME} 2>/dev/null || true
+            
+            echo "=== FINAL FILES ==="
+            ls -la ${ZAP_REPORT_DIR}/
+            echo "=== ZAP SCAN RESULTS ==="
+            grep -E "(FAIL-NEW|WARN-NEW|PASS:)" ${ZAP_REPORT_DIR}/zap-error.log 2>/dev/null || echo "No scan results in error log"
+            echo "=== JSON FILE CONTENT (first 5 lines) ==="
+            head -n 5 ${ZAP_REPORT_DIR}/${JSON_FILE} 2>/dev/null || echo "No JSON file"
+            echo "=== ERROR LOG (if any) ==="
+            cat ${ZAP_REPORT_DIR}/zap-error.log 2>/dev/null || echo "No error log"
+            
+            # Cleanup temporary script
+            rm -f ${WORKSPACE}/run_zap_scan.sh 2>/dev/null || true
+        """
+        
+        archiveArtifacts artifacts: "zap-reports/*", allowEmptyArchive: true
+    }
+    
+    success {
+        echo "✅ DAST SCAN COMPLETED"
+        
+        // SAFETY CHECK - hanya update jika masih running
+        sh """
+            cd ${DJANGO_MANAGE_DIR}
+            CURRENT_STATUS=\$(${PYTHON_PATH} manage.py shell -c "
+from dast_reports.models import DASTScan
+try:
+    scan = DASTScan.objects.get(id=${SCAN_ID})
+    print(scan.status)
+except:
+    print('not_found')
+            ")
+            
+            if [ \"\$CURRENT_STATUS\" = \"running\" ]; then
+                ${PYTHON_PATH} manage.py update_scan_status \\
+                    --scan-id=${SCAN_ID} \\
+                    --status=completed \\
+                    --quiet
+                echo "Updated status to completed"
+            else
+                echo "Status already is \$CURRENT_STATUS, no update needed"
+            fi
+        """
+    }
+    
+    failure {
+        echo "❌ DAST SCAN FAILED"
+        
+        sh """
+            cd ${DJANGO_MANAGE_DIR}
+            CURRENT_STATUS=\$(${PYTHON_PATH} manage.py shell -c "
+from dast_reports.models import DASTScan
+try:
+    scan = DASTScan.objects.get(id=${SCAN_ID})
+    print(scan.status)
+except:
+    print('not_found')
+            ")
+            
+            // Only update to failed if still in running state
+            if [ \"\$CURRENT_STATUS\" = \"running\" ]; then
+                ${PYTHON_PATH} manage.py update_scan_status \\
+                    --scan-id=${SCAN_ID} \\
+                    --status=failed \\
+                    --quiet
+                echo "Updated status to failed"
+            else
+                echo "Status already is \$CURRENT_STATUS, no update needed"
+            fi
+        """
+    }
+    
+    aborted {
+        echo "⚠️ DAST SCAN CANCELED"
+        
+        sh """
+            cd ${DJANGO_MANAGE_DIR}
+            CURRENT_STATUS=\$(${PYTHON_PATH} manage.py shell -c "
+from dast_reports.models import DASTScan
+try:
+    scan = DASTScan.objects.get(id=${SCAN_ID})
+    print(scan.status)
+except:
+    print('not_found')
+            ")
+            
+            // Only update to canceled if still in running state
+            if [ \"\$CURRENT_STATUS\" = \"running\" ]; then
+                ${PYTHON_PATH} manage.py update_scan_status \\
+                    --scan-id=${SCAN_ID} \\
+                    --status=canceled \\
+                    --quiet
+                echo "Updated status to canceled"
+            else
+                echo "Status already is \$CURRENT_STATUS, no update needed"
+            fi
+        """
+    }
+}
+}

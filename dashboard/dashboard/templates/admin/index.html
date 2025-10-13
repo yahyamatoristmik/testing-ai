@@ -1,0 +1,244 @@
+<!-- templates/admin/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Security Scanner Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0;
+            background: #f8f9fa;
+        }
+        
+        .admin-header {
+            background: #417690;
+            color: white;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header-left h1 {
+            margin: 0;
+            font-size: 1.5em;
+            padding: 15px 0;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-info {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .logout-form {
+            margin: 0;
+        }
+        
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .main-content {
+            padding: 30px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .app-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .app-card h3 {
+            margin-top: 0;
+            color: #417690;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 12px;
+        }
+        
+        .model-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .model-list li {
+            margin: 10px 0;
+        }
+        
+        .model-list a {
+            text-decoration: none;
+            color: #333;
+            padding: 8px 12px;
+            display: block;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .model-list a:hover {
+            background: #f0f0f0;
+        }
+
+        /* Styling untuk external links */
+        .external-link {
+            background: #f8f9fa;
+            border-left: 4px solid #28a745;
+        }
+        
+        .external-link:hover {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header dengan Logout Form -->
+    <header class="admin-header">
+        <div class="header-left">
+            <h1>🔒 Security Scanner Admin</h1>
+        </div>
+        <div class="header-right">
+            <div class="user-info">
+                Welcome, <strong>{{ user.get_username }}</strong>
+            </div>
+            <form action="/admin/logout/" method="post" class="logout-form">
+                {% csrf_token %}
+                <button type="submit" class="logout-btn">
+                    🚪 Logout
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="dashboard-grid">
+            <!-- CARD UNTUK DATA LEAK (MANUAL) -->
+            <div class="app-card">
+                <h3>🔍 Data Leak Dashboard</h3>
+                <ul class="model-list">
+                    <li>
+                        <a href="https://sentinel.investpro.id/data-leak/dashboard/" 
+                           target="_blank" 
+                           class="external-link">
+                            🌐 Data Leak Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://sentinel.investpro.id/data-leak/history/" 
+                           target="_blank" 
+                           class="external-link">
+                            📊 Data Leak Scans
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- CARD UNTUK DATA SAST (MANUAL) -->
+            <div class="app-card">
+                <h3>🔍 SAST Dashboard</h3>
+                <ul class="model-list">
+                    <li>
+                        <a href="https://sentinel.investpro.id/sast-report/"
+                           target="_blank"
+                           class="external-link">
+                            🌐 SAST Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://sentinel.investpro.id/sast-report/scm-profiles/"
+                           target="_blank"
+                           class="external-link">
+                            🌐  SCM Profiles
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://sentinel.investpro.id/sast-report/repositories/"
+                           target="_blank"
+                           class="external-link">
+                            🌐  Repositories
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://sentinel.investpro.id/sast-report/history/"
+                           target="_blank"
+                           class="external-link">
+                            🌐  Histories
+                        </a>
+                    </li>
+
+
+                </ul>
+            </div>
+           
+ 
+	   <!-- APPS DJANGO OTOMATIS -->
+            {% for app in app_list %}
+            <div class="app-card">
+                <h3>{{ app.name }}</h3>
+                <ul class="model-list">
+                    {% for model in app.models %}
+                    <li>
+                        <a href="{{ model.admin_url }}">
+                            📊 {{ model.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+
+            <!-- CARD TAMBAHAN UNTUK TOOLS LAIN (OPTIONAL) -->
+            <div class="app-card">
+                <h3>🛠️ Security Tools</h3>
+                <ul class="model-list">
+                    <li>
+                        <a href="/admin/external_scanner/externalscan/" class="external-link">
+                            🔍 External Scanner
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/dast/dast/" class="external-link">
+                            🌐 DAST Scans
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/sast/sast/" class="external-link">
+                            🔧 SAST Scans  
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
