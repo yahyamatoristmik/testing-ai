@@ -1,0 +1,8 @@
+# Environment & sensitive files
+.env
+*.key
+*.pem
+*.token
+*.secret
+*.yml
+dashboard/local-ubuntu
